@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { simulation } from '$lib/stores/simulation';
+	import { simulation } from '$lib/stores/simulation.svelte';
 
 	function formatPower(value: number): string {
 		if (Math.abs(value) >= 1000) {

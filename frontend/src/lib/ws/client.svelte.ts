@@ -1,4 +1,4 @@
-import type { Envelope } from './messages.ts';
+import type { Envelope } from './messages';
 
 export type MessageHandler = (envelope: Envelope) => void;
 

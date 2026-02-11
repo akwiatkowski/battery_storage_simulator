@@ -112,15 +112,16 @@ func (h *Handler) handleMessage(msg []byte) {
 
 func (h *Handler) sendDataLoaded(c *Client) {
 	tr := h.engine.TimeRange()
-	sensors := make([]SensorInfo, 0)
-
-	// For now, we know we have a grid power sensor
-	sensors = append(sensors, SensorInfo{
-		ID:   "grid_power",
-		Name: "Grid Power",
-		Type: "grid_power",
-		Unit: "W",
-	})
+	modelSensors := h.engine.Sensors()
+	sensors := make([]SensorInfo, 0, len(modelSensors))
+	for _, s := range modelSensors {
+		sensors = append(sensors, SensorInfo{
+			ID:   s.ID,
+			Name: s.Name,
+			Type: string(s.Type),
+			Unit: s.Unit,
+		})
+	}
 
 	payload := DataLoadedPayload{
 		Sensors: sensors,

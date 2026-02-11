@@ -5,7 +5,7 @@
 
 # Backend
 run-backend:
-	cd backend && go run ./cmd/server/main.go
+	cd backend && go run ./cmd/server/main.go -input-dir ../input -frontend-dir ../frontend/build
 
 build-backend:
 	cd backend && go build -o ../bin/server ./cmd/server/main.go

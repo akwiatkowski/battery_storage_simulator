@@ -1,7 +1,14 @@
 <script lang="ts">
-	import { simulation } from '$lib/stores/simulation';
+	import { simulation } from '$lib/stores/simulation.svelte';
 
-	const speedOptions = [1, 2, 5, 10, 50, 100, 500, 1000];
+	const speedOptions = [
+		{ value: 3600, label: '1 h/s' },
+		{ value: 7200, label: '2 h/s' },
+		{ value: 14400, label: '4 h/s' },
+		{ value: 28800, label: '8 h/s' },
+		{ value: 86400, label: '1 d/s' },
+		{ value: 604800, label: '1 w/s' }
+	];
 
 	function togglePlayPause() {
 		if (simulation.running) {
@@ -24,7 +31,7 @@
 	}
 
 	function formatSimTime(iso: string): string {
-		if (!iso) return '—';
+		if (!iso) return '--';
 		const d = new Date(iso);
 		return d.toLocaleString('en-GB', {
 			year: 'numeric',
@@ -46,14 +53,14 @@
 <div class="controls">
 	<div class="controls-row">
 		<button class="play-btn" onclick={togglePlayPause}>
-			{simulation.running ? '⏸ Pause' : '▶ Play'}
+			{simulation.running ? 'Pause' : 'Play'}
 		</button>
 
 		<label class="speed-control">
 			Speed:
-			<select value={String(simulation.speed)} onchange={handleSpeedChange}>
-				{#each speedOptions as s}
-					<option value={String(s)}>{s}x</option>
+			<select onchange={handleSpeedChange}>
+				{#each speedOptions as opt}
+					<option value={String(opt.value)} selected={simulation.speed === opt.value}>{opt.label}</option>
 				{/each}
 			</select>
 		</label>
@@ -82,8 +89,8 @@
 
 <style>
 	.controls {
-		background: #1a1a2e;
-		border: 1px solid #2a2a4a;
+		background: #f8f8f8;
+		border: 1px solid #ddd;
 		border-radius: 8px;
 		padding: 16px;
 		display: flex;
@@ -99,40 +106,40 @@
 	}
 
 	.play-btn {
-		background: #4a9eff;
+		background: #333;
 		color: white;
 		border: none;
 		border-radius: 6px;
-		padding: 8px 20px;
+		padding: 8px 24px;
 		font-size: 14px;
 		font-weight: 600;
 		cursor: pointer;
-		min-width: 100px;
+		min-width: 90px;
 	}
 
 	.play-btn:hover {
-		background: #3a8eef;
+		background: #555;
 	}
 
 	.speed-control {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		color: #aaa;
+		color: #666;
 		font-size: 13px;
 	}
 
 	select {
-		background: #0f0f23;
-		color: white;
-		border: 1px solid #2a2a4a;
+		background: #fff;
+		color: #222;
+		border: 1px solid #ccc;
 		border-radius: 4px;
 		padding: 6px 8px;
 		font-size: 13px;
 	}
 
 	.sim-time {
-		color: #4a9eff;
+		color: #333;
 		font-size: 14px;
 		font-family: monospace;
 		margin-left: auto;
@@ -140,29 +147,29 @@
 
 	.connection-status {
 		font-size: 12px;
-		color: #ff4444;
+		color: #c0392b;
 		padding: 4px 8px;
 		border-radius: 4px;
-		background: rgba(255, 68, 68, 0.1);
+		background: #fdecea;
 	}
 
 	.connection-status.connected {
-		color: #44ff44;
-		background: rgba(68, 255, 68, 0.1);
+		color: #27ae60;
+		background: #eafaf1;
 	}
 
 	.seek-control {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		color: #aaa;
+		color: #666;
 		font-size: 13px;
 	}
 
 	input[type='datetime-local'] {
-		background: #0f0f23;
-		color: white;
-		border: 1px solid #2a2a4a;
+		background: #fff;
+		color: #222;
+		border: 1px solid #ccc;
 		border-radius: 4px;
 		padding: 6px 8px;
 		font-size: 13px;

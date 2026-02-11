@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { simulation } from '$lib/stores/simulation';
+	import { simulation } from '$lib/stores/simulation.svelte';
 
 	function formatKWh(value: number): string {
 		if (value >= 1000) {
@@ -32,8 +32,8 @@
 	}
 
 	.summary-item {
-		background: #1a1a2e;
-		border: 1px solid #2a2a4a;
+		background: #f8f8f8;
+		border: 1px solid #ddd;
 		border-radius: 8px;
 		padding: 16px;
 		text-align: center;
@@ -52,7 +52,7 @@
 		display: block;
 		font-size: 22px;
 		font-weight: 600;
-		color: #e0e0e0;
+		color: #222;
 		font-family: monospace;
 	}
 </style>

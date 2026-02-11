@@ -63,7 +63,7 @@ func New(s *store.Store, cb Callback) *Engine {
 	return &Engine{
 		store:        s,
 		callback:     cb,
-		speed:        1.0,
+		speed:        3600,
 		lastReadings: make(map[string]model.Reading),
 	}
 }
@@ -129,8 +129,8 @@ func (e *Engine) SetSpeed(speed float64) {
 	if speed < 0.1 {
 		speed = 0.1
 	}
-	if speed > 1000 {
-		speed = 1000
+	if speed > 604800 {
+		speed = 604800
 	}
 
 	e.mu.Lock()
@@ -168,6 +168,11 @@ func (e *Engine) TimeRange() model.TimeRange {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.timeRange
+}
+
+// Sensors returns all registered sensors.
+func (e *Engine) Sensors() []model.Sensor {
+	return e.store.Sensors()
 }
 
 // Step advances the simulation by the given duration and emits readings.

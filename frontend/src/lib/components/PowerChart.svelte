@@ -2,7 +2,7 @@
 	import { Chart, Svg, Area, Axis, Highlight, LinearGradient, Grid } from 'layerchart';
 	import { scaleTime, scaleLinear } from 'd3-scale';
 	import { extent } from 'd3-array';
-	import { simulation, type ChartPoint } from '$lib/stores/simulation';
+	import { simulation, type ChartPoint } from '$lib/stores/simulation.svelte';
 
 	let data: ChartPoint[] = $derived(simulation.chartData);
 

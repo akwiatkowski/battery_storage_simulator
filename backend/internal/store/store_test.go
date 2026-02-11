@@ -108,6 +108,9 @@ func TestStore_GlobalTimeRange(t *testing.T) {
 	_, ok := s.GlobalTimeRange()
 	assert.False(t, ok)
 
+	// sensor.a: 12:00 – 13:00
+	// sensor.b: 11:00 – 14:00
+	// intersection: 12:00 – 13:00
 	r1 := makeReadings("sensor.a", []float64{100, 200}, startTime, hour)
 	r2 := makeReadings("sensor.b", []float64{300, 400}, startTime.Add(-hour), 3*hour)
 	s.AddReadings(r1)
@@ -115,8 +118,21 @@ func TestStore_GlobalTimeRange(t *testing.T) {
 
 	tr, ok := s.GlobalTimeRange()
 	require.True(t, ok)
-	assert.Equal(t, startTime.Add(-hour), tr.Start)
-	assert.Equal(t, startTime.Add(2*hour), tr.End)
+	assert.Equal(t, startTime, tr.Start)
+	assert.Equal(t, startTime.Add(hour), tr.End)
+}
+
+func TestStore_GlobalTimeRange_NoOverlap(t *testing.T) {
+	s := New()
+
+	// Non-overlapping sensors should return false
+	r1 := makeReadings("sensor.a", []float64{100, 200}, startTime, hour)
+	r2 := makeReadings("sensor.b", []float64{300, 400}, startTime.Add(10*hour), hour)
+	s.AddReadings(r1)
+	s.AddReadings(r2)
+
+	_, ok := s.GlobalTimeRange()
+	assert.False(t, ok)
 }
 
 func TestStore_AddReadingsUnsorted(t *testing.T) {

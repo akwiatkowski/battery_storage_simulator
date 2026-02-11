@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,10 +17,14 @@ import (
 )
 
 func main() {
+	inputDir := flag.String("input-dir", "input", "directory containing CSV data files")
+	frontendDir := flag.String("frontend-dir", "frontend/build", "directory containing frontend build")
+	addr := flag.String("addr", ":8080", "listen address")
+	flag.Parse()
+
 	// Load CSV data
 	dataStore := store.New()
-	inputDir := "input"
-	if err := loadCSVs(inputDir, dataStore); err != nil {
+	if err := loadCSVs(*inputDir, dataStore); err != nil {
 		log.Fatalf("Failed to load CSV data: %v", err)
 	}
 
@@ -48,15 +53,13 @@ func main() {
 	mux.Handle("/ws", handler)
 
 	// Serve frontend static files
-	frontendDir := "frontend/build"
-	if _, err := os.Stat(frontendDir); err == nil {
-		log.Printf("Serving frontend from %s", frontendDir)
-		mux.Handle("/", http.FileServer(http.Dir(frontendDir)))
+	if _, err := os.Stat(*frontendDir); err == nil {
+		log.Printf("Serving frontend from %s", *frontendDir)
+		mux.Handle("/", http.FileServer(http.Dir(*frontendDir)))
 	}
 
-	addr := ":8080"
-	log.Printf("Starting server on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	log.Printf("Starting server on %s", *addr)
+	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
 	}
 }

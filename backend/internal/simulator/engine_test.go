@@ -98,7 +98,7 @@ func TestEngine_Init(t *testing.T) {
 
 	state := e.State()
 	assert.Equal(t, startTime, state.Time)
-	assert.Equal(t, 1.0, state.Speed)
+	assert.Equal(t, 3600.0, state.Speed)
 	assert.False(t, state.Running)
 }
 
@@ -137,8 +137,8 @@ func TestEngine_SetSpeed(t *testing.T) {
 	e.SetSpeed(0.01)
 	assert.Equal(t, 0.1, e.State().Speed)
 
-	e.SetSpeed(5000)
-	assert.Equal(t, 1000.0, e.State().Speed)
+	e.SetSpeed(1000000)
+	assert.Equal(t, 604800.0, e.State().Speed)
 }
 
 func TestEngine_Seek(t *testing.T) {

@@ -1,4 +1,4 @@
-import { getClient } from '$lib/ws/client';
+import { getClient, type WSClient } from '$lib/ws/client.svelte';
 import {
 	MSG_SIM_STATE,
 	MSG_SENSOR_READING,
@@ -30,13 +30,16 @@ class SimulationStore {
 
 	// Simulation state
 	simTime = $state('');
-	speed = $state(1);
+	speed = $state(3600);
 	running = $state(false);
 
 	// Sensors
 	sensors = $state<SensorInfo[]>([]);
 	timeRangeStart = $state('');
 	timeRangeEnd = $state('');
+
+	// Grid power sensor ID (resolved from data:loaded)
+	private gridPowerSensorId = '';
 
 	// Current reading
 	currentPower = $state(0);
@@ -50,43 +53,51 @@ class SimulationStore {
 	// Chart data
 	chartData = $state<ChartPoint[]>([]);
 
-	private client = getClient();
+	private client: WSClient | null = null;
 	private unsubscribe: (() => void) | null = null;
 
+	private getOrCreateClient(): WSClient {
+		if (!this.client) {
+			this.client = getClient();
+		}
+		return this.client;
+	}
+
 	init(): void {
-		this.unsubscribe = this.client.onMessage((envelope: Envelope) => {
+		const client = this.getOrCreateClient();
+		this.unsubscribe = client.onMessage((envelope: Envelope) => {
 			this.handleMessage(envelope);
 		});
-		this.client.connect();
+		client.connect();
 
 		// Track connection state
 		$effect.root(() => {
 			$effect(() => {
-				this.connected = this.client.connected;
+				this.connected = client.connected;
 			});
 		});
 	}
 
 	destroy(): void {
 		this.unsubscribe?.();
-		this.client.disconnect();
+		this.client?.disconnect();
 	}
 
 	// Commands
 	start(): void {
-		this.client.send(MSG_SIM_START);
+		this.client?.send(MSG_SIM_START);
 	}
 
 	pause(): void {
-		this.client.send(MSG_SIM_PAUSE);
+		this.client?.send(MSG_SIM_PAUSE);
 	}
 
 	setSpeed(speed: number): void {
-		this.client.send(MSG_SIM_SET_SPEED, { speed });
+		this.client?.send(MSG_SIM_SET_SPEED, { speed });
 	}
 
 	seek(timestamp: string): void {
-		this.client.send(MSG_SIM_SEEK, { timestamp });
+		this.client?.send(MSG_SIM_SEEK, { timestamp });
 		this.chartData = [];
 	}
 
@@ -101,6 +112,10 @@ class SimulationStore {
 			}
 			case MSG_SENSOR_READING: {
 				const p = envelope.payload as SensorReadingPayload;
+				// Only track grid power for the power display
+				if (this.gridPowerSensorId && p.sensor_id !== this.gridPowerSensorId) {
+					break;
+				}
 				this.currentPower = p.value;
 				this.currentPowerTimestamp = p.timestamp;
 
@@ -124,6 +139,12 @@ class SimulationStore {
 				this.sensors = p.sensors;
 				this.timeRangeStart = p.time_range.start;
 				this.timeRangeEnd = p.time_range.end;
+
+				// Resolve grid power sensor ID
+				const gridSensor = p.sensors.find((s) => s.type === 'grid_power');
+				if (gridSensor) {
+					this.gridPowerSensorId = gridSensor.id;
+				}
 				break;
 			}
 		}
