@@ -113,6 +113,12 @@ func sensorTypeFromFilename(name string) (model.SensorType, string) {
 	switch base {
 	case "grid_power":
 		return model.SensorGridPower, "W"
+	case "pv_power":
+		return model.SensorPVPower, "W"
+	case "pump_total_consumption":
+		return model.SensorPumpConsumption, "W"
+	case "pump_total_production":
+		return model.SensorPumpProduction, "W"
 	default:
 		return model.SensorType(base), ""
 	}
@@ -122,6 +128,12 @@ func sensorNameFromType(t model.SensorType) string {
 	switch t {
 	case model.SensorGridPower:
 		return "Grid Power"
+	case model.SensorPVPower:
+		return "PV Power"
+	case model.SensorPumpConsumption:
+		return "Heat Pump Consumption"
+	case model.SensorPumpProduction:
+		return "Heat Pump Production"
 	default:
 		return string(t)
 	}

@@ -4,14 +4,19 @@ import {
 	MSG_SENSOR_READING,
 	MSG_SUMMARY_UPDATE,
 	MSG_DATA_LOADED,
+	MSG_BATTERY_UPDATE,
+	MSG_BATTERY_SUMMARY,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
 	MSG_SIM_SEEK,
+	MSG_BATTERY_CONFIG,
 	type SimStatePayload,
 	type SensorReadingPayload,
 	type SummaryPayload,
 	type DataLoadedPayload,
+	type BatteryUpdatePayload,
+	type BatterySummaryPayload,
 	type SensorInfo,
 	type Envelope
 } from '$lib/ws/messages';
@@ -38,20 +43,48 @@ class SimulationStore {
 	timeRangeStart = $state('');
 	timeRangeEnd = $state('');
 
-	// Grid power sensor ID (resolved from data:loaded)
+	// Sensor IDs (resolved from data:loaded)
 	private gridPowerSensorId = '';
+	private pvSensorId = '';
+	private heatPumpSensorId = '';
+	private heatPumpProdSensorId = '';
 
-	// Current reading
+	// Current readings
 	currentPower = $state(0);
 	currentPowerTimestamp = $state('');
+	currentPVPower = $state(0);
+	currentHeatPumpPower = $state(0);
+	currentHeatPumpProdPower = $state(0);
 
 	// Energy summary
 	todayKWh = $state(0);
 	monthKWh = $state(0);
 	totalKWh = $state(0);
+	gridImportKWh = $state(0);
+	gridExportKWh = $state(0);
+	pvProductionKWh = $state(0);
+	heatPumpKWh = $state(0);
+	heatPumpProdKWh = $state(0);
+	selfConsumptionKWh = $state(0);
+	homeDemandKWh = $state(0);
+	batterySavingsKWh = $state(0);
 
 	// Chart data
 	chartData = $state<ChartPoint[]>([]);
+
+	// Battery state
+	batteryEnabled = $state(false);
+	batteryCapacityKWh = $state(10);
+	batteryMaxPowerKW = $state(5);
+	batteryDischargeToPercent = $state(10);
+	batteryChargeToPercent = $state(100);
+	batterySoCPercent = $state(0);
+	batteryPowerW = $state(0);
+	adjustedGridW = $state(0);
+	batteryCycles = $state(0);
+	batteryTimeAtPowerSec = $state<Record<string, number>>({});
+	batteryTimeAtSoCPctSec = $state<Record<string, number>>({});
+	batteryMonthSoCSeconds = $state<Record<string, Record<string, number>>>({});
 
 	private client: WSClient | null = null;
 	private unsubscribe: (() => void) | null = null;
@@ -101,6 +134,23 @@ class SimulationStore {
 		this.chartData = [];
 	}
 
+	reset(): void {
+		if (this.timeRangeStart) {
+			this.seek(this.timeRangeStart);
+		}
+	}
+
+	setBatteryConfig(): void {
+		this.client?.send(MSG_BATTERY_CONFIG, {
+			enabled: this.batteryEnabled,
+			capacity_kwh: this.batteryCapacityKWh,
+			max_power_w: this.batteryMaxPowerKW * 1000,
+			discharge_to_percent: this.batteryDischargeToPercent,
+			charge_to_percent: this.batteryChargeToPercent
+		});
+		this.chartData = [];
+	}
+
 	private handleMessage(envelope: Envelope): void {
 		switch (envelope.type) {
 			case MSG_SIM_STATE: {
@@ -112,7 +162,18 @@ class SimulationStore {
 			}
 			case MSG_SENSOR_READING: {
 				const p = envelope.payload as SensorReadingPayload;
-				// Only track grid power for the power display
+				if (p.sensor_id === this.pvSensorId) {
+					this.currentPVPower = p.value;
+					break;
+				}
+				if (p.sensor_id === this.heatPumpSensorId) {
+					this.currentHeatPumpPower = p.value;
+					break;
+				}
+				if (p.sensor_id === this.heatPumpProdSensorId) {
+					this.currentHeatPumpProdPower = p.value;
+					break;
+				}
 				if (this.gridPowerSensorId && p.sensor_id !== this.gridPowerSensorId) {
 					break;
 				}
@@ -132,6 +193,30 @@ class SimulationStore {
 				this.todayKWh = p.today_kwh;
 				this.monthKWh = p.month_kwh;
 				this.totalKWh = p.total_kwh;
+				this.gridImportKWh = p.grid_import_kwh;
+				this.gridExportKWh = p.grid_export_kwh;
+				this.pvProductionKWh = p.pv_production_kwh;
+				this.heatPumpKWh = p.heat_pump_kwh;
+				this.heatPumpProdKWh = p.heat_pump_prod_kwh;
+				this.selfConsumptionKWh = p.self_consumption_kwh;
+				this.homeDemandKWh = p.home_demand_kwh;
+				this.batterySavingsKWh = p.battery_savings_kwh;
+				break;
+			}
+			case MSG_BATTERY_UPDATE: {
+				const p = envelope.payload as BatteryUpdatePayload;
+				this.batteryPowerW = p.battery_power_w;
+				this.adjustedGridW = p.adjusted_grid_w;
+				this.batterySoCPercent = p.soc_percent;
+				break;
+			}
+			case MSG_BATTERY_SUMMARY: {
+				const p = envelope.payload as BatterySummaryPayload;
+				this.batterySoCPercent = p.soc_percent;
+				this.batteryCycles = p.cycles;
+				this.batteryTimeAtPowerSec = p.time_at_power_sec;
+				this.batteryTimeAtSoCPctSec = p.time_at_soc_pct_sec;
+				this.batteryMonthSoCSeconds = p.month_soc_seconds ?? {};
 				break;
 			}
 			case MSG_DATA_LOADED: {
@@ -140,10 +225,22 @@ class SimulationStore {
 				this.timeRangeStart = p.time_range.start;
 				this.timeRangeEnd = p.time_range.end;
 
-				// Resolve grid power sensor ID
-				const gridSensor = p.sensors.find((s) => s.type === 'grid_power');
-				if (gridSensor) {
-					this.gridPowerSensorId = gridSensor.id;
+				// Resolve sensor IDs by type
+				for (const s of p.sensors) {
+					switch (s.type) {
+						case 'grid_power':
+							this.gridPowerSensorId = s.id;
+							break;
+						case 'pv_power':
+							this.pvSensorId = s.id;
+							break;
+						case 'pump_total_consumption':
+							this.heatPumpSensorId = s.id;
+							break;
+						case 'pump_total_production':
+							this.heatPumpProdSensorId = s.id;
+							break;
+					}
 				}
 				break;
 			}

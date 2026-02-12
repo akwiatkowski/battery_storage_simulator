@@ -53,7 +53,15 @@ describe('Message payload types', () => {
 		const payload: SummaryPayload = {
 			today_kwh: 12.3,
 			month_kwh: 345.6,
-			total_kwh: 1234.5
+			total_kwh: 1234.5,
+			grid_import_kwh: 1234.5,
+			grid_export_kwh: 100.2,
+			pv_production_kwh: 500.0,
+			heat_pump_kwh: 200.0,
+			heat_pump_prod_kwh: 600.0,
+			self_consumption_kwh: 400.0,
+			home_demand_kwh: 1634.3,
+			battery_savings_kwh: 50.0
 		};
 		expect(payload.today_kwh).toBe(12.3);
 	});

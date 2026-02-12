@@ -5,7 +5,10 @@ import "time"
 type SensorType string
 
 const (
-	SensorGridPower SensorType = "grid_power"
+	SensorGridPower       SensorType = "grid_power"
+	SensorPVPower         SensorType = "pv_power"
+	SensorPumpConsumption SensorType = "pump_total_consumption"
+	SensorPumpProduction  SensorType = "pump_total_production"
 )
 
 type Reading struct {

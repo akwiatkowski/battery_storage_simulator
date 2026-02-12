@@ -7,35 +7,149 @@
 		}
 		return value.toFixed(1) + ' kWh';
 	}
+
+	let hasPV = $derived(simulation.pvProductionKWh > 0);
+	let hasHeatPump = $derived(simulation.heatPumpKWh > 0);
+	let hasBattery = $derived(simulation.batteryEnabled);
+
+	// Self-consumption percentage
+	let selfConsumptionPct = $derived(
+		simulation.pvProductionKWh > 0
+			? ((simulation.selfConsumptionKWh / simulation.pvProductionKWh) * 100).toFixed(0)
+			: '0'
+	);
+
+	// COP = thermal output / electrical input
+	let cop = $derived(
+		simulation.heatPumpKWh > 0
+			? (simulation.heatPumpProdKWh / simulation.heatPumpKWh).toFixed(1)
+			: '0.0'
+	);
+
+	// Appliance consumption = demand - heat pump
+	let applianceKWh = $derived(
+		Math.max(0, simulation.homeDemandKWh - simulation.heatPumpKWh)
+	);
+
+	// Battery comparison values
+	let withoutBattery = $derived(simulation.gridImportKWh + simulation.batterySavingsKWh);
+	let withBattery = $derived(simulation.gridImportKWh);
 </script>
 
-<div class="summary">
-	<div class="summary-item">
-		<span class="label">Today</span>
-		<span class="value">{formatKWh(simulation.todayKWh)}</span>
+<div class="summary-sections">
+	<!-- Row 1: Grid Import -->
+	<div class="section">
+		<div class="section-title">Grid Import</div>
+		<div class="summary-row">
+			<div class="summary-item">
+				<span class="label">Today</span>
+				<span class="value">{formatKWh(simulation.todayKWh)}</span>
+			</div>
+			<div class="summary-item">
+				<span class="label">This Month</span>
+				<span class="value">{formatKWh(simulation.monthKWh)}</span>
+			</div>
+			<div class="summary-item">
+				<span class="label">Total</span>
+				<span class="value">{formatKWh(simulation.totalKWh)}</span>
+			</div>
+		</div>
 	</div>
-	<div class="summary-item">
-		<span class="label">This Month</span>
-		<span class="value">{formatKWh(simulation.monthKWh)}</span>
-	</div>
-	<div class="summary-item">
-		<span class="label">Total</span>
-		<span class="value">{formatKWh(simulation.totalKWh)}</span>
-	</div>
+
+	<!-- Row 2: Energy Sources (when PV data exists) -->
+	{#if hasPV}
+		<div class="section">
+			<div class="section-title">Energy Sources</div>
+			<div class="summary-row">
+				<div class="summary-item">
+					<span class="label">PV Production</span>
+					<span class="value pv">{formatKWh(simulation.pvProductionKWh)}</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Self-Consumption</span>
+					<span class="value pv">{formatKWh(simulation.selfConsumptionKWh)} <small>({selfConsumptionPct}%)</small></span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Grid Export</span>
+					<span class="value export">{formatKWh(simulation.gridExportKWh)}</span>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Row 3: Home (when heat pump data exists) -->
+	{#if hasHeatPump}
+		<div class="section">
+			<div class="section-title">Home</div>
+			<div class="summary-row">
+				<div class="summary-item">
+					<span class="label">Demand</span>
+					<span class="value">{formatKWh(simulation.homeDemandKWh)}</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Heat Pump <small>(COP {cop})</small></span>
+					<span class="value heat-pump">{formatKWh(simulation.heatPumpKWh)}</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Appliances</span>
+					<span class="value">{formatKWh(applianceKWh)}</span>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Row 4: Battery Savings (when battery enabled) -->
+	{#if hasBattery && simulation.batterySavingsKWh > 0}
+		<div class="section">
+			<div class="section-title">Battery Savings</div>
+			<div class="summary-row">
+				<div class="summary-item">
+					<span class="label">Without Battery</span>
+					<span class="value muted">{formatKWh(withoutBattery)}</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">With Battery</span>
+					<span class="value">{formatKWh(withBattery)}</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Saved</span>
+					<span class="value savings">{formatKWh(simulation.batterySavingsKWh)}</span>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
-	.summary {
+	.summary-sections {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.section {
+		background: #f8f8f8;
+		border: 1px solid #ddd;
+		border-radius: 8px;
+		padding: 12px 16px;
+	}
+
+	.section-title {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #94a3b8;
+		margin-bottom: 8px;
+	}
+
+	.summary-row {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 12px;
 	}
 
 	.summary-item {
-		background: #f8f8f8;
-		border: 1px solid #ddd;
-		border-radius: 8px;
-		padding: 16px;
 		text-align: center;
 	}
 
@@ -45,14 +159,47 @@
 		font-size: 12px;
 		text-transform: uppercase;
 		letter-spacing: 1px;
-		margin-bottom: 8px;
+		margin-bottom: 4px;
+	}
+
+	.label small {
+		text-transform: none;
+		letter-spacing: 0;
+		font-size: 11px;
+		color: #64748b;
 	}
 
 	.value {
 		display: block;
-		font-size: 22px;
+		font-size: 20px;
 		font-weight: 600;
 		color: #222;
 		font-family: monospace;
+	}
+
+	.value small {
+		font-size: 13px;
+		font-weight: 500;
+		color: #64748b;
+	}
+
+	.value.pv {
+		color: #ca8a04;
+	}
+
+	.value.export {
+		color: #22c55e;
+	}
+
+	.value.heat-pump {
+		color: #ea580c;
+	}
+
+	.value.savings {
+		color: #16a34a;
+	}
+
+	.value.muted {
+		color: #94a3b8;
 	}
 </style>

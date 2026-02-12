@@ -13,10 +13,12 @@ import (
 )
 
 type mockCallback struct {
-	mu        sync.Mutex
-	states    []State
-	readings  []SensorReading
-	summaries []Summary
+	mu               sync.Mutex
+	states           []State
+	readings         []SensorReading
+	summaries        []Summary
+	batteryUpdates   []BatteryUpdate
+	batterySummaries []BatterySummary
 }
 
 func (m *mockCallback) OnState(s State) {
@@ -35,6 +37,18 @@ func (m *mockCallback) OnSummary(s Summary) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.summaries = append(m.summaries, s)
+}
+
+func (m *mockCallback) OnBatteryUpdate(u BatteryUpdate) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.batteryUpdates = append(m.batteryUpdates, u)
+}
+
+func (m *mockCallback) OnBatterySummary(s BatterySummary) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.batterySummaries = append(m.batterySummaries, s)
 }
 
 func (m *mockCallback) readingCount() int {
@@ -253,4 +267,341 @@ func TestStartOfDay(t *testing.T) {
 func TestStartOfMonth(t *testing.T) {
 	ts := time.Date(2024, 11, 21, 15, 30, 45, 0, time.UTC)
 	assert.Equal(t, time.Date(2024, 11, 1, 0, 0, 0, 0, time.UTC), startOfMonth(ts))
+}
+
+func (m *mockCallback) lastBatteryUpdate() BatteryUpdate {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.batteryUpdates) == 0 {
+		return BatteryUpdate{}
+	}
+	return m.batteryUpdates[len(m.batteryUpdates)-1]
+}
+
+func (m *mockCallback) lastBatterySummary() BatterySummary {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.batterySummaries) == 0 {
+		return BatterySummary{}
+	}
+	return m.batterySummaries[len(m.batterySummaries)-1]
+}
+
+func TestEngine_BatteryReducesGrid(t *testing.T) {
+	// 3 readings at 2000W consumption, 1 hour apart
+	s := makeStore([]float64{2000, 2000, 2000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+	})
+	// Pre-charge: set battery SoC high so it can discharge
+	e.mu.Lock()
+	e.battery.SoCWh = 5000
+	e.mu.Unlock()
+
+	e.Step(3 * hour)
+
+	// Battery should have produced updates
+	bu := cb.lastBatteryUpdate()
+	assert.InDelta(t, 2000, bu.BatteryPowerW, 0.01) // discharging at 2000W
+	assert.InDelta(t, 0, bu.AdjustedGridW, 0.01)    // grid fully offset
+
+	// With backward-looking: first reading no action, readings 2+3 fully offset.
+	// Adjusted values: [2000, 0, 0]. Intervals: avg(2000,0)*1h=1000Wh, avg(0,0)*1h=0.
+	summary := cb.lastSummary()
+	assert.InDelta(t, 1.0, summary.TotalKWh, 0.01)
+}
+
+func TestEngine_BatteryAbsorbsExport(t *testing.T) {
+	// 3 readings at -1500W (export), 1 hour apart
+	s := makeStore([]float64{-1500, -1500, -1500})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+	})
+
+	e.Step(3 * hour)
+
+	// Battery should be charging
+	bu := cb.lastBatteryUpdate()
+	assert.Less(t, bu.BatteryPowerW, 0.0)     // negative = charging
+	assert.Greater(t, bu.AdjustedGridW, -1500.0) // less export to grid
+}
+
+func TestEngine_SeekResetsBattery(t *testing.T) {
+	s := makeStore([]float64{1000, 1000, 1000, 1000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	cfg := &BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 10,
+		ChargeToPercent:    100,
+	}
+	e.SetBattery(cfg)
+	e.mu.Lock()
+	e.battery.SoCWh = 5000
+	e.mu.Unlock()
+
+	e.Step(2 * hour)
+
+	// Seek should reset battery
+	e.Seek(startTime)
+
+	e.mu.Lock()
+	soc := e.battery.SoCWh
+	e.mu.Unlock()
+
+	// Should be back to discharge floor: 10% of 10kWh = 1000 Wh
+	assert.InDelta(t, 1000, soc, 0.01)
+}
+
+func TestEngine_BatteryChargesAcrossSteps(t *testing.T) {
+	// Simulate incremental steps like the real tick loop.
+	// 5 readings: export, export, export, consume, consume
+	// Backward-looking: interval action uses previous reading's demand.
+	//   [0] -1000W → baseline
+	//   [1] -1000W → prev=-1000 → charge 1000Wh. SoC: 1000+1000=2000 (20%)
+	//   [2] -1000W → prev=-1000 → charge 1000Wh. SoC: 2000+1000=3000 (30%)
+	//   [3]  2000W → prev=-1000 → charge 1000Wh. SoC: 3000+1000=4000 (40%)
+	//   [4]  2000W → prev=2000  → discharge 2000Wh. SoC: 4000-2000=2000 (20%)
+	s := makeStore([]float64{-1000, -1000, -1000, 2000, 2000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 10,
+		ChargeToPercent:    100,
+	})
+
+	for i := 0; i < 8; i++ {
+		e.Step(30 * time.Minute)
+	}
+
+	updates := cb.allBatteryUpdates()
+	t.Logf("Total battery updates: %d", len(updates))
+	for i, u := range updates {
+		t.Logf("  [%d] power=%.0fW adjusted=%.0fW SoC=%.1f%% ts=%s",
+			i, u.BatteryPowerW, u.AdjustedGridW, u.SoCPercent, u.Timestamp)
+	}
+
+	require.Equal(t, 5, len(updates))
+
+	// [2]: after 3 charges of 1000Wh. SoC: 1000+1000+1000=3000 (30%)
+	assert.InDelta(t, 30, updates[2].SoCPercent, 0.01)
+
+	// [3]: prev was still export → charges. SoC: 4000 (40%)
+	assert.InDelta(t, -1000, updates[3].BatteryPowerW, 0.01)
+	assert.InDelta(t, 40, updates[3].SoCPercent, 0.01)
+
+	// [4]: prev was consume 2000W → discharges. SoC: 4000-2000=2000 (20%)
+	assert.InDelta(t, 2000, updates[4].BatteryPowerW, 0.01)
+	assert.InDelta(t, 20, updates[4].SoCPercent, 0.01)
+
+	bs := cb.lastBatterySummary()
+	assert.Greater(t, bs.Cycles, 0.0)
+	assert.NotEmpty(t, bs.TimeAtPowerSec)
+}
+
+func TestEngine_NoBatteryNoUpdates(t *testing.T) {
+	s := makeStore([]float64{1000, 1000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.Step(2 * hour)
+
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	assert.Empty(t, cb.batteryUpdates)
+	assert.Empty(t, cb.batterySummaries)
+}
+
+func (m *mockCallback) allBatteryUpdates() []BatteryUpdate {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]BatteryUpdate, len(m.batteryUpdates))
+	copy(cp, m.batteryUpdates)
+	return cp
+}
+
+func makeEnergyStore() *store.Store {
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pv", Name: "PV Power", Type: model.SensorPVPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump", Name: "Heat Pump", Type: model.SensorPumpConsumption, Unit: "W"})
+
+	// Grid: 2 readings at 500W, 1h apart
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+	})
+	// PV: 2 readings at 1000W
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.pv", Type: model.SensorPVPower, Value: 1000, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.pv", Type: model.SensorPVPower, Value: 1000, Unit: "W"},
+	})
+	// Heat pump: 2 readings at 300W
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+	})
+	return s
+}
+
+func TestEngine_PVAccumulation(t *testing.T) {
+	s := makeEnergyStore()
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.Step(2 * hour)
+
+	summary := cb.lastSummary()
+	// PV: 1000W * 1h = 1000 Wh = 1.0 kWh
+	assert.InDelta(t, 1.0, summary.PVProductionKWh, 0.01)
+}
+
+func TestEngine_HeatPumpAccumulation(t *testing.T) {
+	s := makeEnergyStore()
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.Step(2 * hour)
+
+	summary := cb.lastSummary()
+	// Heat pump: 300W * 1h = 300 Wh = 0.3 kWh
+	assert.InDelta(t, 0.3, summary.HeatPumpKWh, 0.01)
+}
+
+func TestEngine_GridImportExportSplit(t *testing.T) {
+	// 3 readings: +1000, -500, -500
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 1000, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -500, Unit: "W"},
+		{Timestamp: startTime.Add(2 * hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -500, Unit: "W"},
+	})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.Step(3 * hour)
+
+	summary := cb.lastSummary()
+	// Interval 1: avg(1000,-500)*1h = 250Wh (positive → import)
+	// Interval 2: avg(-500,-500)*1h = -500Wh (negative → export 500Wh)
+	assert.InDelta(t, 0.25, summary.GridImportKWh, 0.01)
+	assert.InDelta(t, 0.5, summary.GridExportKWh, 0.01)
+}
+
+func TestEngine_BatterySavings(t *testing.T) {
+	// 3 readings at 2000W consumption, battery fully offsets
+	s := makeStore([]float64{2000, 2000, 2000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+	})
+	e.mu.Lock()
+	e.battery.SoCWh = 5000
+	e.mu.Unlock()
+
+	e.Step(3 * hour)
+
+	summary := cb.lastSummary()
+	// Raw grid import: 2000W * 2h = 4000 Wh = 4.0 kWh
+	// With battery, adjusted grid = 0 for intervals 2+3 (backward-looking)
+	// Battery savings = rawImport - adjustedImport > 0
+	assert.Greater(t, summary.BatterySavingsKWh, 0.0)
+}
+
+func TestEngine_BatteryFullSimulation(t *testing.T) {
+	// Simulate realistic pattern: export (charges battery), then consumption (discharges).
+	// Backward-looking: battery action for interval [i-1, i] uses reading[i-1]'s demand.
+	//
+	// 7 readings, 1 hour apart:
+	//   [0] -2000W  → first reading, baseline only
+	//   [1] -2000W  → interval uses prev=-2000W → charges 2000Wh
+	//   [2] -2000W  → interval uses prev=-2000W → charges 2000Wh
+	//   [3]  1000W  → interval uses prev=-2000W → charges 2000Wh (prev was still export!)
+	//   [4]  1000W  → interval uses prev=1000W  → discharges 1000Wh
+	//   [5]  1000W  → interval uses prev=1000W  → discharges 1000Wh
+	//   [6]  1000W  → interval uses prev=1000W  → discharges 1000Wh
+	s := makeStore([]float64{-2000, -2000, -2000, 1000, 1000, 1000, 1000})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+	})
+
+	e.Step(7 * hour)
+
+	updates := cb.allBatteryUpdates()
+	require.Equal(t, 7, len(updates), "should have one battery update per reading")
+
+	for i, u := range updates {
+		t.Logf("  Update[%d]: power=%.0fW adjusted=%.0fW SoC=%.1f%%", i, u.BatteryPowerW, u.AdjustedGridW, u.SoCPercent)
+	}
+
+	// [0]: first reading, no dt
+	assert.InDelta(t, 0, updates[0].BatteryPowerW, 0.01)
+	assert.InDelta(t, 0, updates[0].SoCPercent, 0.01)
+
+	// [1]: charges using prev=-2000W. SoC: 0+2000=2000
+	assert.InDelta(t, -2000, updates[1].BatteryPowerW, 0.01)
+	assert.InDelta(t, 20, updates[1].SoCPercent, 0.01)
+
+	// [2]: charges. SoC: 2000+2000=4000
+	assert.InDelta(t, -2000, updates[2].BatteryPowerW, 0.01)
+	assert.InDelta(t, 40, updates[2].SoCPercent, 0.01)
+
+	// [3]: prev was still -2000W (export), so charges. SoC: 4000+2000=6000
+	assert.InDelta(t, -2000, updates[3].BatteryPowerW, 0.01)
+	assert.InDelta(t, 60, updates[3].SoCPercent, 0.01)
+
+	// [4]: prev=1000W (consume), discharges. SoC: 6000-1000=5000
+	assert.InDelta(t, 1000, updates[4].BatteryPowerW, 0.01)
+	assert.InDelta(t, 50, updates[4].SoCPercent, 0.01)
+
+	// [5]: discharge. SoC: 5000-1000=4000
+	assert.InDelta(t, 40, updates[5].SoCPercent, 0.01)
+
+	// [6]: discharge. SoC: 4000-1000=3000
+	assert.InDelta(t, 30, updates[6].SoCPercent, 0.01)
+
+	bs := cb.lastBatterySummary()
+	assert.Greater(t, bs.Cycles, 0.0)
+
+	summary := cb.lastSummary()
+	t.Logf("Energy: total=%.3f kWh, Battery: SoC=%.1f%% Cycles=%.3f", summary.TotalKWh, bs.SoCPercent, bs.Cycles)
 }

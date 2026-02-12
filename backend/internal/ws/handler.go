@@ -105,6 +105,26 @@ func (h *Handler) handleMessage(msg []byte) {
 		}
 		h.engine.Seek(t)
 
+	case TypeBatteryConfig:
+		var p BatteryConfigPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("Invalid battery config payload: %v", err)
+			return
+		}
+		if p.Enabled {
+			cfg := &simulator.BatteryConfig{
+				CapacityKWh:        p.CapacityKWh,
+				MaxPowerW:          p.MaxPowerW,
+				DischargeToPercent: p.DischargeToPercent,
+				ChargeToPercent:    p.ChargeToPercent,
+			}
+			h.engine.SetBattery(cfg)
+		} else {
+			h.engine.SetBattery(nil)
+		}
+		// Reset simulation to apply battery from the start
+		h.engine.Seek(h.engine.TimeRange().Start)
+
 	default:
 		log.Printf("Unknown message type: %s", env.Type)
 	}

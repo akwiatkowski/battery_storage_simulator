@@ -46,3 +46,32 @@ func (b *Bridge) OnSummary(s simulator.Summary) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnBatteryUpdate(u simulator.BatteryUpdate) {
+	msg, err := NewEnvelope(TypeBatteryUpdate, BatteryUpdatePayload{
+		BatteryPowerW: u.BatteryPowerW,
+		AdjustedGridW: u.AdjustedGridW,
+		SoCPercent:    u.SoCPercent,
+		Timestamp:     u.Timestamp,
+	})
+	if err != nil {
+		log.Printf("Error marshaling battery update: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}
+
+func (b *Bridge) OnBatterySummary(s simulator.BatterySummary) {
+	msg, err := NewEnvelope(TypeBatterySummary, BatterySummaryPayload{
+		SoCPercent:      s.SoCPercent,
+		Cycles:          s.Cycles,
+		TimeAtPowerSec:  s.TimeAtPowerSec,
+		TimeAtSoCPctSec: s.TimeAtSoCPctSec,
+		MonthSoCSeconds: s.MonthSoCSeconds,
+	})
+	if err != nil {
+		log.Printf("Error marshaling battery summary: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

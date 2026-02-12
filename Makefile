@@ -1,3 +1,7 @@
+# Auto-detect mise tool paths so `make` works without manual activation
+MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
+export PATH := $(MISE_PATHS)$(PATH)
+
 .PHONY: run-backend build-backend test-backend test-backend-v lint-backend \
        install-frontend dev-frontend build-frontend test-frontend lint-frontend \
        dev test lint build clean \
@@ -35,10 +39,16 @@ test-frontend:
 lint-frontend:
 	cd frontend && npm run lint && npm run check
 
-# All-in-one
+# Development — full hot-reload
+# Backend: air watches .go files, auto-rebuilds and restarts server
+# Frontend: vite dev server with HMR
 dev:
-	$(MAKE) run-backend & $(MAKE) dev-frontend & wait
+	$(MAKE) dev-backend & $(MAKE) dev-frontend & wait
 
+dev-backend:
+	air
+
+# All-in-one
 test: test-backend test-frontend
 
 lint: lint-backend lint-frontend
@@ -56,4 +66,4 @@ docker-down:
 	docker compose down
 
 clean:
-	rm -rf bin/ frontend/build/ frontend/.svelte-kit/
+	rm -rf bin/ tmp/ frontend/build/ frontend/.svelte-kit/
