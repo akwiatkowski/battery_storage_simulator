@@ -1,0 +1,18 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "cd backend && go build -o ../bin/server ./cmd/server/main.go"
+  bin = "./bin/server"
+  args_bin = ["-input-dir", "./input", "-frontend-dir", "./frontend/build"]
+  delay = 500
+  exclude_dir = ["tmp", "bin", "frontend", "testdata", "input"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go"]
+  kill_delay = 500
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

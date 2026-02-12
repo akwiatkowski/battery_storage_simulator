@@ -27,10 +27,14 @@ sensor.zigbee_power,562.78,2024-11-21T14:00:00.000Z`
 	assert.Equal(t, "sensor.zigbee_power", readings[0].SensorID)
 	assert.Equal(t, model.SensorGridPower, readings[0].Type)
 	assert.InDelta(t, -368.85, readings[0].Value, 0.001)
+	assert.InDelta(t, -368.85, readings[0].Min, 0.001)
+	assert.InDelta(t, -368.85, readings[0].Max, 0.001)
 	assert.Equal(t, "W", readings[0].Unit)
 	assert.Equal(t, time.Date(2024, 11, 21, 12, 0, 0, 0, time.UTC), readings[0].Timestamp)
 
 	assert.InDelta(t, 759.59, readings[1].Value, 0.001)
+	assert.InDelta(t, 759.59, readings[1].Min, 0.001)
+	assert.InDelta(t, 759.59, readings[1].Max, 0.001)
 	assert.Equal(t, time.Date(2024, 11, 21, 13, 0, 0, 0, time.UTC), readings[1].Timestamp)
 }
 

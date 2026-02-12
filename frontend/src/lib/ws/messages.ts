@@ -10,6 +10,7 @@ export const MSG_SIM_START = 'sim:start';
 export const MSG_SIM_PAUSE = 'sim:pause';
 export const MSG_SIM_SET_SPEED = 'sim:set_speed';
 export const MSG_SIM_SEEK = 'sim:seek';
+export const MSG_SIM_SET_SOURCE = 'sim:set_source';
 export const MSG_BATTERY_CONFIG = 'battery:config';
 
 // Server -> Client
@@ -26,6 +27,10 @@ export interface SetSpeedPayload {
 
 export interface SeekPayload {
 	timestamp: string;
+}
+
+export interface SetSourcePayload {
+	source: string;
 }
 
 export interface SimStatePayload {

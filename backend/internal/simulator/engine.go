@@ -231,6 +231,14 @@ func (e *Engine) Seek(t time.Time) {
 	e.broadcastSummary()
 }
 
+// SetTimeRange updates the engine's time range and seeks to its start.
+func (e *Engine) SetTimeRange(tr model.TimeRange) {
+	e.mu.Lock()
+	e.timeRange = tr
+	e.mu.Unlock()
+	e.Seek(tr.Start)
+}
+
 // TimeRange returns the data time range.
 func (e *Engine) TimeRange() model.TimeRange {
 	e.mu.Lock()

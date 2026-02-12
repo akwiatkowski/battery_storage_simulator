@@ -1,0 +1,5 @@
+sensor_id,start_time,avg,min_val,max_val
+sensor.0x943469fffed2bf71_power,1732186800.0,-368.85,-810.0,-162.0
+sensor.0x943469fffed2bf71_power,1732190400.0,759.59,-286.0,2214.0
+sensor.hoymiles_gateway_solarh_3054300_real_power,1732186800.0,1500.0,200.0,3000.0
+sensor.unknown_entity,1732186800.0,100.0,50.0,150.0

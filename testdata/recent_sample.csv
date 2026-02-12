@@ -1,0 +1,5 @@
+sensor_id,value,updated_ts
+sensor.0x943469fffed2bf71_power,-341,1770896300.6877737
+sensor.0x943469fffed2bf71_power,-324,1770896240.6859024
+sensor.hoymiles_gateway_solarh_3054300_real_power,1200,1770896300.0
+sensor.unknown_entity,999,1770896300.0

@@ -30,6 +30,17 @@
 		}
 	}
 
+	const sourceOptions = [
+		{ value: 'all', label: 'All' },
+		{ value: 'current', label: 'Current (~2w)' },
+		{ value: 'archival', label: 'Archival (~15m)' }
+	];
+
+	function handleSourceChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		simulation.setDataSource(target.value);
+	}
+
 	function formatSimTime(iso: string): string {
 		if (!iso) return '--';
 		const d = new Date(iso);
@@ -75,6 +86,15 @@
 	</div>
 
 	<div class="controls-row">
+		<label class="source-control">
+			Source:
+			<select onchange={handleSourceChange}>
+				{#each sourceOptions as opt}
+					<option value={opt.value} selected={simulation.dataSource === opt.value}>{opt.label}</option>
+				{/each}
+			</select>
+		</label>
+
 		<label class="seek-control">
 			Seek:
 			<input
@@ -156,6 +176,14 @@
 	.connection-status.connected {
 		color: #27ae60;
 		background: #eafaf1;
+	}
+
+	.source-control {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: #666;
+		font-size: 13px;
 	}
 
 	.seek-control {

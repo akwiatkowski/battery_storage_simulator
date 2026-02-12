@@ -109,6 +109,8 @@ func (p *HomeAssistantParser) parseRecord(record []string, lineNum int) (model.R
 		SensorID:  entityID,
 		Type:      p.SensorType,
 		Value:     value,
+		Min:       value,
+		Max:       value,
 		Unit:      p.Unit,
 	}, nil
 }

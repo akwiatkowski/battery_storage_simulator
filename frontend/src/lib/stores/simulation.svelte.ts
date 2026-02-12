@@ -10,6 +10,7 @@ import {
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
 	MSG_SIM_SEEK,
+	MSG_SIM_SET_SOURCE,
 	MSG_BATTERY_CONFIG,
 	type SimStatePayload,
 	type SensorReadingPayload,
@@ -49,6 +50,7 @@ class SimulationStore {
 	simTime = $state('');
 	speed = $state(3600);
 	running = $state(false);
+	dataSource = $state('all');
 
 	// Sensors
 	sensors = $state<SensorInfo[]>([]);
@@ -154,6 +156,14 @@ class SimulationStore {
 
 	seek(timestamp: string): void {
 		this.client?.send(MSG_SIM_SEEK, { timestamp });
+		this.chartData = [];
+		this.dailyRecords = [];
+		this.currentDayKey = '';
+	}
+
+	setDataSource(source: string): void {
+		this.dataSource = source;
+		this.client?.send(MSG_SIM_SET_SOURCE, { source });
 		this.chartData = [];
 		this.dailyRecords = [];
 		this.currentDayKey = '';

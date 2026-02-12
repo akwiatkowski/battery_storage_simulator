@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"energy_simulator/internal/model"
 	"energy_simulator/internal/simulator"
 )
 
@@ -17,12 +18,13 @@ var upgrader = websocket.Upgrader{
 
 // Handler manages WebSocket connections and routes messages to the engine.
 type Handler struct {
-	hub    *Hub
-	engine *simulator.Engine
+	hub          *Hub
+	engine       *simulator.Engine
+	sourceRanges map[string]model.TimeRange
 }
 
-func NewHandler(hub *Hub, engine *simulator.Engine) *Handler {
-	return &Handler{hub: hub, engine: engine}
+func NewHandler(hub *Hub, engine *simulator.Engine, sourceRanges map[string]model.TimeRange) *Handler {
+	return &Handler{hub: hub, engine: engine, sourceRanges: sourceRanges}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +107,20 @@ func (h *Handler) handleMessage(msg []byte) {
 		}
 		h.engine.Seek(t)
 
+	case TypeSimSetSource:
+		var p SetSourcePayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("Invalid set_source payload: %v", err)
+			return
+		}
+		tr, ok := h.sourceRanges[p.Source]
+		if !ok {
+			log.Printf("Unknown source: %s", p.Source)
+			return
+		}
+		h.engine.SetTimeRange(tr)
+		h.broadcastDataLoaded()
+
 	case TypeBatteryConfig:
 		var p BatteryConfigPayload
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
@@ -130,7 +146,16 @@ func (h *Handler) handleMessage(msg []byte) {
 	}
 }
 
-func (h *Handler) sendDataLoaded(c *Client) {
+func (h *Handler) broadcastDataLoaded() {
+	msg, err := h.dataLoadedMessage()
+	if err != nil {
+		log.Printf("Error creating data:loaded message: %v", err)
+		return
+	}
+	h.hub.Broadcast(msg)
+}
+
+func (h *Handler) dataLoadedMessage() ([]byte, error) {
 	tr := h.engine.TimeRange()
 	modelSensors := h.engine.Sensors()
 	sensors := make([]SensorInfo, 0, len(modelSensors))
@@ -151,7 +176,11 @@ func (h *Handler) sendDataLoaded(c *Client) {
 		},
 	}
 
-	msg, err := NewEnvelope(TypeDataLoaded, payload)
+	return NewEnvelope(TypeDataLoaded, payload)
+}
+
+func (h *Handler) sendDataLoaded(c *Client) {
+	msg, err := h.dataLoadedMessage()
 	if err != nil {
 		log.Printf("Error creating data:loaded message: %v", err)
 		return

@@ -191,9 +191,13 @@ func loadCSVs(dir string) *store.Store {
 		}
 
 		if len(readings) > 0 {
+			name := string(sensorType)
+			if info, ok := model.SensorCatalog[sensorType]; ok {
+				name = info.Name
+			}
 			dataStore.AddSensor(model.Sensor{
 				ID:   readings[0].SensorID,
-				Name: sensorNameFromType(sensorType),
+				Name: name,
 				Type: sensorType,
 				Unit: unit,
 			})
@@ -205,32 +209,10 @@ func loadCSVs(dir string) *store.Store {
 
 func sensorTypeFromFilename(name string) (model.SensorType, string) {
 	base := strings.TrimSuffix(name, ".csv")
-	switch base {
-	case "grid_power":
-		return model.SensorGridPower, "W"
-	case "pv_power":
-		return model.SensorPVPower, "W"
-	case "pump_total_consumption":
-		return model.SensorPumpConsumption, "W"
-	case "pump_total_production":
-		return model.SensorPumpProduction, "W"
-	default:
-		return model.SensorType(base), ""
+	st := model.SensorType(base)
+	if info, ok := model.SensorCatalog[st]; ok {
+		return st, info.Unit
 	}
-}
-
-func sensorNameFromType(t model.SensorType) string {
-	switch t {
-	case model.SensorGridPower:
-		return "Grid Power"
-	case model.SensorPVPower:
-		return "PV Power"
-	case model.SensorPumpConsumption:
-		return "Heat Pump Consumption"
-	case model.SensorPumpProduction:
-		return "Heat Pump Production"
-	default:
-		return string(t)
-	}
+	return st, ""
 }
 

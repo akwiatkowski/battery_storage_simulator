@@ -51,11 +51,53 @@ var SensorHomeAssistantID = map[SensorType]string{
 	SensorExternal:        "sensor.moc_do_arka",
 }
 
+// HAEntityToSensorType is the reverse of SensorHomeAssistantID.
+var HAEntityToSensorType map[string]SensorType
+
+func init() {
+	HAEntityToSensorType = make(map[string]SensorType, len(SensorHomeAssistantID))
+	for st, entity := range SensorHomeAssistantID {
+		HAEntityToSensorType[entity] = st
+	}
+}
+
+// SensorInfo holds display name and unit for a sensor type.
+type SensorInfo struct {
+	Name string
+	Unit string
+}
+
+// SensorCatalog maps every known SensorType to its display name and unit.
+var SensorCatalog = map[SensorType]SensorInfo{
+	SensorGridPower:       {Name: "Grid Power", Unit: "W"},
+	SensorPVPower:         {Name: "PV Power", Unit: "W"},
+	SensorPumpHeatPower:   {Name: "Heat Pump Heating Power", Unit: "W"},
+	SensorPumpCWUPower:    {Name: "Heat Pump DHW Power", Unit: "W"},
+	SensorPumpConsumption: {Name: "Heat Pump Consumption", Unit: "W"},
+	SensorPumpProduction:  {Name: "Heat Pump Production", Unit: "W"},
+	SensorPumpExtTemp:     {Name: "Outside Temperature", Unit: "°C"},
+	SensorPumpInletTemp:   {Name: "Inlet Temperature", Unit: "°C"},
+	SensorPumpOutletTemp:  {Name: "Outlet Temperature", Unit: "°C"},
+	SensorPumpZone1Temp:   {Name: "Zone 1 Temperature", Unit: "°C"},
+	SensorElectricKettle:  {Name: "Electric Kettle", Unit: "W"},
+	SensorOven:            {Name: "Oven", Unit: "W"},
+	SensorWashing:         {Name: "Washing Machine", Unit: "W"},
+	SensorDrier:           {Name: "Drier", Unit: "W"},
+	SensorTvMedia:         {Name: "TV & Media", Unit: "W"},
+	SensorOlek1:           {Name: "Olek Desk", Unit: "W"},
+	SensorOlek2:           {Name: "Olek Closet", Unit: "W"},
+	SensorBeata:           {Name: "Beata Desk", Unit: "W"},
+	SensorNetwork:         {Name: "Network", Unit: "W"},
+	SensorExternal:        {Name: "External Power", Unit: "W"},
+}
+
 type Reading struct {
 	Timestamp time.Time
 	SensorID  string
 	Type      SensorType
 	Value     float64
+	Min       float64
+	Max       float64
 	Unit      string
 }
 

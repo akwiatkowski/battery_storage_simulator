@@ -22,6 +22,10 @@ type SeekPayload struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type SetSourcePayload struct {
+	Source string `json:"source"`
+}
+
 // Server -> Client messages
 
 type SimStatePayload struct {
@@ -75,6 +79,7 @@ const (
 	TypeSimPause      = "sim:pause"
 	TypeSimSetSpeed   = "sim:set_speed"
 	TypeSimSeek       = "sim:seek"
+	TypeSimSetSource  = "sim:set_source"
 	TypeBatteryConfig = "battery:config"
 
 	// Server -> Client

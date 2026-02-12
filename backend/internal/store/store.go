@@ -89,9 +89,8 @@ func (s *Store) TimeRange(sensorID string) (model.TimeRange, bool) {
 	}, true
 }
 
-// GlobalTimeRange returns the intersection of all sensors' time ranges.
-// Start is the latest first-reading (all sensors have data from this point).
-// End is the earliest last-reading (all sensors have data until this point).
+// GlobalTimeRange returns the union of all sensors' time ranges.
+// Start is the earliest first-reading, End is the latest last-reading.
 func (s *Store) GlobalTimeRange() (model.TimeRange, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -110,10 +109,10 @@ func (s *Store) GlobalTimeRange() (model.TimeRange, bool) {
 			start = rStart
 			end = rEnd
 		} else {
-			if rStart.After(start) {
+			if rStart.Before(start) {
 				start = rStart
 			}
-			if rEnd.Before(end) {
+			if rEnd.After(end) {
 				end = rEnd
 			}
 		}
