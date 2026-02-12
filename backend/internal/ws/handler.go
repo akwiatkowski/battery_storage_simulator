@@ -141,6 +141,19 @@ func (h *Handler) handleMessage(msg []byte) {
 		// Reset simulation to apply battery from the start
 		h.engine.Seek(h.engine.TimeRange().Start)
 
+	case TypeSimSetPrediction:
+		var p SetPredictionPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("Invalid set_prediction payload: %v", err)
+			return
+		}
+		h.engine.Pause()
+		h.engine.SetPredictionMode(p.Enabled)
+		h.broadcastDataLoaded()
+		if p.Enabled {
+			h.engine.Start()
+		}
+
 	default:
 		log.Printf("Unknown message type: %s", env.Type)
 	}

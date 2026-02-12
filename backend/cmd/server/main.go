@@ -12,6 +12,7 @@ import (
 
 	"energy_simulator/internal/ingest"
 	"energy_simulator/internal/model"
+	"energy_simulator/internal/predictor"
 	"energy_simulator/internal/simulator"
 	"energy_simulator/internal/store"
 	"energy_simulator/internal/ws"
@@ -55,6 +56,15 @@ func main() {
 	if !ok {
 		log.Fatal("No data loaded")
 	}
+
+	// Constrain start to first grid power reading — other sensors may have
+	// earlier data but the simulation is grid-power-centric.
+	if gpID := findSensorID(dataStore, model.SensorGridPower); gpID != "" {
+		if gpRange, ok := dataStore.TimeRange(gpID); ok {
+			tr.Start = gpRange.Start
+		}
+	}
+
 	sourceRanges["all"] = tr
 	log.Printf("Data loaded: %s to %s", tr.Start.Format("2006-01-02"), tr.End.Format("2006-01-02"))
 
@@ -65,6 +75,10 @@ func main() {
 	if !engine.Init() {
 		log.Fatal("Failed to initialize simulation engine")
 	}
+	engine.SetTimeRange(tr)
+
+	// Attempt to load NN models for prediction mode
+	loadPredictionModels(engine, dataStore)
 
 	handler := ws.NewHandler(hub, engine, sourceRanges)
 
@@ -203,6 +217,16 @@ func registerSensorsFromReadings(readings []model.Reading, s *store.Store) {
 	}
 }
 
+// findSensorID returns the ID of the first sensor matching the given type, or "".
+func findSensorID(s *store.Store, st model.SensorType) string {
+	for _, sensor := range s.Sensors() {
+		if sensor.Type == st {
+			return sensor.ID
+		}
+	}
+	return ""
+}
+
 // extendTimeRange extends tr to include the min/max timestamps from readings.
 func extendTimeRange(tr model.TimeRange, readings []model.Reading) model.TimeRange {
 	for _, r := range readings {
@@ -232,6 +256,40 @@ func mergeTimeRanges(a, b model.TimeRange) model.TimeRange {
 		result.End = b.End
 	}
 	return result
+}
+
+func loadPredictionModels(engine *simulator.Engine, s *store.Store) {
+	tempData, err := os.ReadFile("model/temperature.json")
+	if err != nil {
+		log.Printf("Temperature model not found: %v (prediction mode unavailable)", err)
+		return
+	}
+	powerData, err := os.ReadFile("model/grid_power.json")
+	if err != nil {
+		log.Printf("Grid power model not found: %v (prediction mode unavailable)", err)
+		return
+	}
+
+	tempPred, err := predictor.LoadTemperaturePredictor(tempData, 42)
+	if err != nil {
+		log.Printf("Failed to load temperature model: %v", err)
+		return
+	}
+	powerPred, err := predictor.LoadPredictor(powerData, 42)
+	if err != nil {
+		log.Printf("Failed to load grid power model: %v", err)
+		return
+	}
+
+	gridID := findSensorID(s, model.SensorGridPower)
+	if gridID == "" {
+		log.Printf("No grid power sensor found, prediction mode unavailable")
+		return
+	}
+
+	provider := simulator.NewPredictionProvider(tempPred, powerPred, gridID)
+	engine.SetPrediction(provider)
+	log.Printf("NN prediction models loaded successfully")
 }
 
 func sensorTypeFromFilename(name string) (model.SensorType, string) {

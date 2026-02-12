@@ -90,6 +90,11 @@ type Engine struct {
 	// Battery simulation (nil when disabled)
 	battery *Battery
 
+	// Prediction mode
+	predictionMode bool
+	prediction     *PredictionProvider
+	savedTimeRange model.TimeRange
+
 	// Tracking for energy summaries
 	lastReadings map[string]model.Reading // last reading per sensor
 	dayStart     time.Time
@@ -198,19 +203,57 @@ func (e *Engine) SetBattery(cfg *BatteryConfig) {
 	e.mu.Unlock()
 }
 
-// Seek jumps to a specific time. Resets energy summaries and battery.
-func (e *Engine) Seek(t time.Time) {
+// SetPrediction stores the prediction provider (called at startup).
+func (e *Engine) SetPrediction(p *PredictionProvider) {
 	e.mu.Lock()
-	if t.Before(e.timeRange.Start) {
-		t = e.timeRange.Start
-	}
-	if t.After(e.timeRange.End) {
-		t = e.timeRange.End
+	e.prediction = p
+	e.mu.Unlock()
+}
+
+// SetPredictionMode enables or disables neural network prediction mode.
+func (e *Engine) SetPredictionMode(enabled bool) {
+	e.mu.Lock()
+	if enabled == e.predictionMode {
+		e.mu.Unlock()
+		return
 	}
 
-	e.simTime = t
-	e.dayStart = startOfDay(t)
-	e.monthStart = startOfMonth(t)
+	if enabled {
+		e.savedTimeRange = e.timeRange
+		e.predictionMode = true
+		now := time.Now().UTC()
+		e.simTime = now
+		e.timeRange = model.TimeRange{
+			Start: now,
+			End:   time.Date(2200, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		e.resetAccumulators()
+		if e.prediction != nil {
+			e.prediction.Init(now)
+		}
+	} else {
+		e.predictionMode = false
+		e.timeRange = e.savedTimeRange
+		e.simTime = e.savedTimeRange.Start
+		e.resetAccumulators()
+	}
+	e.mu.Unlock()
+
+	e.broadcastState()
+	e.broadcastSummary()
+}
+
+// PredictionMode returns whether prediction mode is active.
+func (e *Engine) PredictionMode() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.predictionMode
+}
+
+// resetAccumulators zeroes all energy counters. Must be called with mu held.
+func (e *Engine) resetAccumulators() {
+	e.dayStart = startOfDay(e.simTime)
+	e.monthStart = startOfMonth(e.simTime)
 	e.todayWh = 0
 	e.monthWh = 0
 	e.totalWh = 0
@@ -225,6 +268,20 @@ func (e *Engine) Seek(t time.Time) {
 	if e.battery != nil {
 		e.battery.Reset()
 	}
+}
+
+// Seek jumps to a specific time. Resets energy summaries and battery.
+func (e *Engine) Seek(t time.Time) {
+	e.mu.Lock()
+	if t.Before(e.timeRange.Start) {
+		t = e.timeRange.Start
+	}
+	if t.After(e.timeRange.End) {
+		t = e.timeRange.End
+	}
+
+	e.simTime = t
+	e.resetAccumulators()
 	e.mu.Unlock()
 
 	e.broadcastState()
@@ -307,8 +364,10 @@ func (e *Engine) tick() bool {
 	prevTime := e.simTime
 	e.simTime = e.simTime.Add(simDelta)
 
+	inPrediction := e.predictionMode
+
 	ended := false
-	if !e.simTime.Before(e.timeRange.End) {
+	if !inPrediction && !e.simTime.Before(e.timeRange.End) {
 		e.simTime = e.timeRange.End
 		ended = true
 	}
@@ -334,6 +393,16 @@ func (e *Engine) tick() bool {
 }
 
 func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
+	e.mu.Lock()
+	inPrediction := e.predictionMode
+	pred := e.prediction
+	e.mu.Unlock()
+
+	if inPrediction && pred != nil {
+		e.emitPredictions(prevTime, currentTime)
+		return
+	}
+
 	// ReadingsInRange is [start, end), so add a nanosecond when at end of data
 	// to include the final reading.
 	queryEnd := currentTime
@@ -374,6 +443,44 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 				}
 				e.updateEnergy(r)
 			}
+		}
+	}
+}
+
+func (e *Engine) emitPredictions(prevTime, currentTime time.Time) {
+	e.mu.Lock()
+	pred := e.prediction
+	bat := e.battery
+	e.mu.Unlock()
+
+	readings := pred.ReadingsForRange(prevTime, currentTime)
+	for _, sr := range readings {
+		e.callback.OnReading(sr)
+
+		ts, _ := time.Parse(time.RFC3339, sr.Timestamp)
+		r := model.Reading{
+			Timestamp: ts,
+			SensorID:  sr.SensorID,
+			Type:      model.SensorGridPower,
+			Value:     sr.Value,
+			Unit:      sr.Unit,
+		}
+
+		if bat != nil {
+			e.updateRawGridEnergy(r)
+			result := bat.Process(r.Value, r.Timestamp)
+			e.callback.OnBatteryUpdate(BatteryUpdate{
+				BatteryPowerW: result.BatteryPowerW,
+				AdjustedGridW: result.AdjustedGridW,
+				SoCPercent:    result.SoCPercent,
+				Timestamp:     sr.Timestamp,
+			})
+			adjusted := r
+			adjusted.Value = result.AdjustedGridW
+			e.updateEnergy(adjusted)
+		} else {
+			e.updateRawGridEnergy(r)
+			e.updateEnergy(r)
 		}
 	}
 }

@@ -88,12 +88,16 @@
 	<div class="controls-row">
 		<label class="source-control">
 			Source:
-			<select onchange={handleSourceChange}>
+			<select onchange={handleSourceChange} disabled={simulation.predictionEnabled}>
 				{#each sourceOptions as opt}
 					<option value={opt.value} selected={simulation.dataSource === opt.value}>{opt.label}</option>
 				{/each}
 			</select>
 		</label>
+
+		<button class="reset-btn" onclick={() => simulation.reset()} disabled={simulation.predictionEnabled}>
+			Reset
+		</button>
 
 		<label class="seek-control">
 			Seek:
@@ -102,7 +106,19 @@
 				min={toDatetimeLocal(simulation.timeRangeStart)}
 				max={toDatetimeLocal(simulation.timeRangeEnd)}
 				onchange={handleSeek}
+				disabled={simulation.predictionEnabled}
 			/>
+		</label>
+	</div>
+
+	<div class="controls-row">
+		<label class="toggle-label">
+			<input
+				type="checkbox"
+				bind:checked={simulation.predictionEnabled}
+				onchange={() => simulation.setPredictionMode()}
+			/>
+			<span>NN Prediction</span>
 		</label>
 	</div>
 </div>
@@ -178,6 +194,20 @@
 		background: #eafaf1;
 	}
 
+	.reset-btn {
+		background: #eee;
+		color: #333;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 6px 12px;
+		font-size: 13px;
+		cursor: pointer;
+	}
+
+	.reset-btn:hover {
+		background: #ddd;
+	}
+
 	.source-control {
 		display: flex;
 		align-items: center;
@@ -192,6 +222,22 @@
 		gap: 8px;
 		color: #666;
 		font-size: 13px;
+	}
+
+	.toggle-label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		cursor: pointer;
+		font-size: 14px;
+		font-weight: 600;
+		color: #334155;
+	}
+
+	.toggle-label input {
+		width: 16px;
+		height: 16px;
+		accent-color: #3b82f6;
 	}
 
 	input[type='datetime-local'] {

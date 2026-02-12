@@ -12,6 +12,7 @@ export const MSG_SIM_SET_SPEED = 'sim:set_speed';
 export const MSG_SIM_SEEK = 'sim:seek';
 export const MSG_SIM_SET_SOURCE = 'sim:set_source';
 export const MSG_BATTERY_CONFIG = 'battery:config';
+export const MSG_SIM_SET_PREDICTION = 'sim:set_prediction';
 
 // Server -> Client
 export const MSG_SIM_STATE = 'sim:state';

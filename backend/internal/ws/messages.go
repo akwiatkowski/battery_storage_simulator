@@ -80,7 +80,8 @@ const (
 	TypeSimSetSpeed   = "sim:set_speed"
 	TypeSimSeek       = "sim:seek"
 	TypeSimSetSource  = "sim:set_source"
-	TypeBatteryConfig = "battery:config"
+	TypeBatteryConfig    = "battery:config"
+	TypeSimSetPrediction = "sim:set_prediction"
 
 	// Server -> Client
 	TypeSimState       = "sim:state"
@@ -90,6 +91,10 @@ const (
 	TypeBatteryUpdate  = "battery:update"
 	TypeBatterySummary = "battery:summary"
 )
+
+type SetPredictionPayload struct {
+	Enabled bool `json:"enabled"`
+}
 
 // Battery payloads
 

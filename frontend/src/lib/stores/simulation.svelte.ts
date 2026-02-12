@@ -12,6 +12,7 @@ import {
 	MSG_SIM_SEEK,
 	MSG_SIM_SET_SOURCE,
 	MSG_BATTERY_CONFIG,
+	MSG_SIM_SET_PREDICTION,
 	type SimStatePayload,
 	type SensorReadingPayload,
 	type SummaryPayload,
@@ -51,6 +52,7 @@ class SimulationStore {
 	speed = $state(3600);
 	running = $state(false);
 	dataSource = $state('all');
+	predictionEnabled = $state(false);
 
 	// Sensors
 	sensors = $state<SensorInfo[]>([]);
@@ -183,6 +185,13 @@ class SimulationStore {
 			discharge_to_percent: this.batteryDischargeToPercent,
 			charge_to_percent: this.batteryChargeToPercent
 		});
+		this.chartData = [];
+		this.dailyRecords = [];
+		this.currentDayKey = '';
+	}
+
+	setPredictionMode(): void {
+		this.client?.send(MSG_SIM_SET_PREDICTION, { enabled: this.predictionEnabled });
 		this.chartData = [];
 		this.dailyRecords = [];
 		this.currentDayKey = '';
