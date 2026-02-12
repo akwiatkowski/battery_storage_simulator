@@ -25,7 +25,10 @@ func main() {
 		inLines = append(inLines, fmt.Sprintf("  '%s'  -- %s", e.haID, e.slug))
 	}
 
-	fmt.Printf(`SELECT
+	inList := strings.Join(inLines, "\n  ,")
+
+	fmt.Printf(`-- Long-term statistics (hourly aggregates, kept indefinitely)
+SELECT
   statistics_meta.statistic_id AS sensor_id,
   statistics.start_ts AS start_time,
   statistics.mean AS avg,
@@ -37,5 +40,19 @@ WHERE statistics_meta.statistic_id IN (
 %s
 )
 ORDER BY statistics_meta.statistic_id, statistics.start_ts;
-`, strings.Join(inLines, "\n  ,"))
+`, inList)
+
+	fmt.Printf(`
+-- Recent states (raw measurements, kept ~2 weeks)
+SELECT
+  states_meta.entity_id AS sensor_id,
+  states.state AS value,
+  states.last_updated_ts AS updated_ts
+FROM states
+INNER JOIN states_meta ON states.metadata_id = states_meta.metadata_id
+WHERE states_meta.entity_id IN (
+%s
+)
+ORDER BY states_meta.entity_id, states.last_updated_ts DESC;
+`, inList)
 }
