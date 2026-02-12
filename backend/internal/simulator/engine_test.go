@@ -51,6 +51,31 @@ func (m *mockCallback) OnBatterySummary(s BatterySummary) {
 	m.batterySummaries = append(m.batterySummaries, s)
 }
 
+func TestSummary_OffGridCoverage(t *testing.T) {
+	s := Summary{
+		HomeDemandKWh:      1000,
+		HeatPumpKWh:        400,
+		SelfConsumptionKWh: 300,
+		BatterySavingsKWh:  200,
+	}
+
+	// Full usage: non-grid=500, demand=1000 → 50%
+	assert.InDelta(t, 50.0, s.OffGridCoverage(100, 100), 0.1)
+
+	// No heat pump: demand=600 (appliances only), non-grid=500 → 83.3%
+	assert.InDelta(t, 83.3, s.OffGridCoverage(0, 100), 0.1)
+
+	// Half everything: demand=500, non-grid=500 → 100%
+	assert.InDelta(t, 100.0, s.OffGridCoverage(50, 50), 0.1)
+
+	// Zero demand → 100%
+	assert.InDelta(t, 100.0, s.OffGridCoverage(0, 0), 0.1)
+
+	// No battery savings, no self-consumption → 0%
+	empty := Summary{HomeDemandKWh: 500, HeatPumpKWh: 100}
+	assert.InDelta(t, 0.0, empty.OffGridCoverage(100, 100), 0.1)
+}
+
 func (m *mockCallback) readingCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

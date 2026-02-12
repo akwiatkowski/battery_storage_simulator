@@ -34,6 +34,20 @@
 	// Battery comparison values
 	let withoutBattery = $derived(simulation.gridImportKWh + simulation.batterySavingsKWh);
 	let withBattery = $derived(simulation.gridImportKWh);
+
+	// Savings per kWh of battery capacity
+	let savingsPerKWh = $derived(
+		simulation.batteryCapacityKWh > 0
+			? simulation.batterySavingsKWh / simulation.batteryCapacityKWh
+			: 0
+	);
+
+	// Off-grid coverage percentage
+	let offGridPct = $derived(
+		simulation.homeDemandKWh > 0
+			? Math.min(100, ((simulation.selfConsumptionKWh + simulation.batterySavingsKWh) / simulation.homeDemandKWh) * 100)
+			: 0
+	);
 </script>
 
 <div class="summary-sections">
@@ -115,6 +129,17 @@
 					<span class="label">Saved</span>
 					<span class="value savings">{formatKWh(simulation.batterySavingsKWh)}</span>
 				</div>
+			</div>
+			<div class="summary-row" style="margin-top: 8px">
+				<div class="summary-item">
+					<span class="label">Savings/kWh</span>
+					<span class="value">{savingsPerKWh.toFixed(1)} kWh</span>
+				</div>
+				<div class="summary-item">
+					<span class="label">Off-Grid <span class="help-icon" title="Percentage of home energy demand covered by PV self-consumption and battery, without relying on grid import. Formula: (Self-Consumption + Battery Savings) / Home Demand &times; 100">?</span></span>
+					<span class="value savings">{offGridPct.toFixed(1)}%</span>
+				</div>
+				<div class="summary-item"></div>
 			</div>
 		</div>
 	{/if}
@@ -201,5 +226,23 @@
 
 	.value.muted {
 		color: #94a3b8;
+	}
+
+	.help-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		border: 1px solid #cbd5e1;
+		font-size: 10px;
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+		color: #94a3b8;
+		cursor: help;
+		vertical-align: middle;
+		line-height: 1;
+		text-transform: none;
+		letter-spacing: 0;
 	}
 </style>

@@ -2,17 +2,24 @@
 MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
 export PATH := $(MISE_PATHS)$(PATH)
 
-.PHONY: run-backend build-backend test-backend test-backend-v lint-backend \
+.PHONY: run-backend build-backend build-battery-compare test-backend test-backend-v lint-backend \
        install-frontend dev-frontend build-frontend test-frontend lint-frontend \
-       dev test lint build clean \
-       docker-build docker-up docker-down
+       dev test lint build clean compare \
+       docker-build docker-up docker-down \
+       sql-stats
 
 # Backend
 run-backend:
 	cd backend && go run ./cmd/server/main.go -input-dir ../input -frontend-dir ../frontend/build
 
 build-backend:
-	cd backend && go build -o ../bin/server ./cmd/server/main.go
+	cd backend && go build -o ../bin/server ./cmd/server
+
+build-battery-compare:
+	cd backend && go build -o ../bin/battery-compare ./cmd/battery-compare
+
+compare: build-battery-compare
+	./bin/battery-compare -input-dir input
 
 test-backend:
 	cd backend && go test ./...
@@ -67,3 +74,7 @@ docker-down:
 
 clean:
 	rm -rf bin/ tmp/ frontend/build/ frontend/.svelte-kit/
+
+# Print SQL query for fetching sensor statistics from Home Assistant DB
+sql-stats:
+	@cd backend && go run ./cmd/sql-stats

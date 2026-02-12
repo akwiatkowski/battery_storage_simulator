@@ -21,16 +21,27 @@ docker compose up # production build
 ## Project Layout
 
 - `backend/cmd/server/main.go` — entry point
+- `backend/cmd/battery-compare/` — CLI tool for battery config comparison
+- `backend/cmd/sql-stats/` — generates SQL for Home Assistant DB queries
 - `backend/internal/model/` — domain types (Reading, Sensor, SensorType)
 - `backend/internal/ingest/` — CSV parsing (Home Assistant format)
 - `backend/internal/store/` — in-memory data store
 - `backend/internal/simulator/` — time-based replay engine
 - `backend/internal/ws/` — WebSocket hub, handler, message types
 - `frontend/src/lib/ws/` — WebSocket client + message types
-- `frontend/src/lib/stores/` — Svelte 5 reactive state
+- `frontend/src/lib/stores/` — Svelte 5 reactive state (includes daily record tracking)
 - `frontend/src/lib/components/` — dashboard components
 - `input/` — CSV data files (committed)
 - `testdata/` — test fixture CSVs
+
+### Key Frontend Components
+
+- `HomeSchema.svelte` — live power flow diagram
+- `EnergySummary.svelte` — energy totals, battery savings, savings/kWh, off-grid %
+- `BatteryConfig.svelte` — battery parameter controls
+- `BatteryStats.svelte` — battery cycle and power distribution stats
+- `SoCHeatmap.svelte` — monthly SoC distribution heatmap
+- `OffGridHeatmap.svelte` — daily battery autonomy heatmap (GitHub calendar style, red→blue)
 
 ## Conventions
 

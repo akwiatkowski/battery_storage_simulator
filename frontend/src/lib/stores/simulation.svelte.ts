@@ -29,6 +29,18 @@ export interface ChartPoint {
 	value: number;
 }
 
+export interface DailyRecord {
+	date: string; // "YYYY-MM-DD"
+	dayOfWeek: number; // 0=Sun … 6=Sat
+	gridImportKWh: number;
+	selfConsumptionKWh: number;
+	batterySavingsKWh: number;
+	homeDemandKWh: number;
+	heatPumpKWh: number;
+	offGridPct: number;
+	batteryAutonomyHours: number; // hours a full battery could power the house
+}
+
 class SimulationStore {
 	// Connection
 	connected = $state(false);
@@ -86,6 +98,17 @@ class SimulationStore {
 	batteryTimeAtSoCPctSec = $state<Record<string, number>>({});
 	batteryMonthSoCSeconds = $state<Record<string, Record<string, number>>>({});
 
+	// Daily off-grid tracking
+	dailyRecords = $state<DailyRecord[]>([]);
+	private currentDayKey = '';
+	private dayStartSnapshot = {
+		gridImportKWh: 0,
+		selfConsumptionKWh: 0,
+		batterySavingsKWh: 0,
+		homeDemandKWh: 0,
+		heatPumpKWh: 0
+	};
+
 	private client: WSClient | null = null;
 	private unsubscribe: (() => void) | null = null;
 
@@ -132,6 +155,8 @@ class SimulationStore {
 	seek(timestamp: string): void {
 		this.client?.send(MSG_SIM_SEEK, { timestamp });
 		this.chartData = [];
+		this.dailyRecords = [];
+		this.currentDayKey = '';
 	}
 
 	reset(): void {
@@ -149,6 +174,8 @@ class SimulationStore {
 			charge_to_percent: this.batteryChargeToPercent
 		});
 		this.chartData = [];
+		this.dailyRecords = [];
+		this.currentDayKey = '';
 	}
 
 	private handleMessage(envelope: Envelope): void {
@@ -201,6 +228,7 @@ class SimulationStore {
 				this.selfConsumptionKWh = p.self_consumption_kwh;
 				this.homeDemandKWh = p.home_demand_kwh;
 				this.batterySavingsKWh = p.battery_savings_kwh;
+				this.trackDailyData(p);
 				break;
 			}
 			case MSG_BATTERY_UPDATE: {
@@ -245,6 +273,103 @@ class SimulationStore {
 				break;
 			}
 		}
+	}
+	private getHoursFromMidnight(): number {
+		if (!this.simTime || this.simTime.length < 19) return 0;
+		const h = parseInt(this.simTime.slice(11, 13));
+		const m = parseInt(this.simTime.slice(14, 16));
+		const s = parseInt(this.simTime.slice(17, 19));
+		return h + m / 60 + s / 3600;
+	}
+
+	private finalizeDayRecord(p: SummaryPayload): void {
+		// Recompute ALL deltas using current cumulatives before resetting snapshot.
+		// At high sim speeds, ticks can span entire days, so the previous in-progress
+		// record may have stale/zero deltas — this recalculates from snapshot → now.
+		const gridImport = p.grid_import_kwh - this.dayStartSnapshot.gridImportKWh;
+		const selfCons = p.self_consumption_kwh - this.dayStartSnapshot.selfConsumptionKWh;
+		const batSavings = p.battery_savings_kwh - this.dayStartSnapshot.batterySavingsKWh;
+		const demand = p.home_demand_kwh - this.dayStartSnapshot.homeDemandKWh;
+		const heatPump = p.heat_pump_kwh - this.dayStartSnapshot.heatPumpKWh;
+		const offGrid = demand > 0 ? Math.min(100, ((selfCons + batSavings) / demand) * 100) : 0;
+		const autonomy = demand > 0 ? (this.batteryCapacityKWh * 24) / demand : 0;
+
+		if (this.dailyRecords.length > 0) {
+			const records = [...this.dailyRecords];
+			records[records.length - 1] = {
+				...records[records.length - 1],
+				gridImportKWh: gridImport,
+				selfConsumptionKWh: selfCons,
+				batterySavingsKWh: batSavings,
+				homeDemandKWh: demand,
+				heatPumpKWh: heatPump,
+				offGridPct: offGrid,
+				batteryAutonomyHours: autonomy
+			};
+			this.dailyRecords = records;
+		}
+	}
+
+	private trackDailyData(p: SummaryPayload): void {
+		if (!this.simTime) return;
+		const dayKey = this.simTime.slice(0, 10);
+
+		if (this.currentDayKey && dayKey !== this.currentDayKey) {
+			// Day changed — recompute previous day's values from full delta, then reset
+			this.finalizeDayRecord(p);
+			this.dayStartSnapshot = {
+				gridImportKWh: p.grid_import_kwh,
+				selfConsumptionKWh: p.self_consumption_kwh,
+				batterySavingsKWh: p.battery_savings_kwh,
+				homeDemandKWh: p.home_demand_kwh,
+				heatPumpKWh: p.heat_pump_kwh
+			};
+		}
+
+		if (!this.currentDayKey) {
+			this.dayStartSnapshot = {
+				gridImportKWh: p.grid_import_kwh,
+				selfConsumptionKWh: p.self_consumption_kwh,
+				batterySavingsKWh: p.battery_savings_kwh,
+				homeDemandKWh: p.home_demand_kwh,
+				heatPumpKWh: p.heat_pump_kwh
+			};
+		}
+
+		this.currentDayKey = dayKey;
+
+		const gridImport = p.grid_import_kwh - this.dayStartSnapshot.gridImportKWh;
+		const selfCons = p.self_consumption_kwh - this.dayStartSnapshot.selfConsumptionKWh;
+		const batSavings = p.battery_savings_kwh - this.dayStartSnapshot.batterySavingsKWh;
+		const demand = p.home_demand_kwh - this.dayStartSnapshot.homeDemandKWh;
+		const heatPump = p.heat_pump_kwh - this.dayStartSnapshot.heatPumpKWh;
+		const offGrid = demand > 0 ? Math.min(100, ((selfCons + batSavings) / demand) * 100) : 0;
+
+		const hoursElapsed = Math.max(0.01, this.getHoursFromMidnight());
+		const autonomy = demand > 0
+			? (this.batteryCapacityKWh * hoursElapsed) / demand
+			: 0;
+
+		const d = new Date(dayKey + 'T00:00:00');
+		const record: DailyRecord = {
+			date: dayKey,
+			dayOfWeek: d.getDay(),
+			gridImportKWh: gridImport,
+			selfConsumptionKWh: selfCons,
+			batterySavingsKWh: batSavings,
+			homeDemandKWh: demand,
+			heatPumpKWh: heatPump,
+			offGridPct: offGrid,
+			batteryAutonomyHours: autonomy
+		};
+
+		const records = [...this.dailyRecords];
+		if (records.length > 0 && records[records.length - 1].date === dayKey) {
+			records[records.length - 1] = record;
+		} else {
+			records.push(record);
+		}
+		this.dailyRecords = records;
 	}
 }
 

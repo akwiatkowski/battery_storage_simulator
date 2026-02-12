@@ -7,6 +7,7 @@
 	import BatteryConfig from '$lib/components/BatteryConfig.svelte';
 	import BatteryStats from '$lib/components/BatteryStats.svelte';
 	import SoCHeatmap from '$lib/components/SoCHeatmap.svelte';
+	import OffGridHeatmap from '$lib/components/OffGridHeatmap.svelte';
 
 	onMount(() => {
 		simulation.init();
@@ -71,6 +72,8 @@
 			<SoCHeatmap />
 		</div>
 	</div>
+
+	<OffGridHeatmap />
 </div>
 
 <style>

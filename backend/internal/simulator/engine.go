@@ -31,6 +31,26 @@ type Summary struct {
 	BatterySavingsKWh  float64 `json:"battery_savings_kwh"`
 }
 
+// OffGridCoverage returns the percentage of adjusted home demand that could be
+// covered by non-grid sources (PV self-consumption + battery). heatPumpPct and
+// appliancePct scale the respective demand components (0–100).
+func (s *Summary) OffGridCoverage(heatPumpPct, appliancePct float64) float64 {
+	applianceKWh := s.HomeDemandKWh - s.HeatPumpKWh
+	if applianceKWh < 0 {
+		applianceKWh = 0
+	}
+	adjustedDemand := s.HeatPumpKWh*(heatPumpPct/100) + applianceKWh*(appliancePct/100)
+	if adjustedDemand <= 0 {
+		return 100
+	}
+	nonGridKWh := s.SelfConsumptionKWh + s.BatterySavingsKWh
+	coverage := nonGridKWh / adjustedDemand * 100
+	if coverage > 100 {
+		coverage = 100
+	}
+	return coverage
+}
+
 // SensorReading is a reading emitted during simulation.
 type SensorReading struct {
 	SensorID  string  `json:"sensor_id"`
