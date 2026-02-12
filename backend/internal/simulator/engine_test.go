@@ -284,6 +284,58 @@ func TestEngine_TimeRange(t *testing.T) {
 	assert.Equal(t, startTime.Add(2*hour), tr.End)
 }
 
+func TestEngine_SetTimeRange(t *testing.T) {
+	s := makeStore([]float64{100, 200, 300, 400, 500})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	// Step to accumulate some energy
+	e.Step(2 * hour)
+	assert.Greater(t, cb.lastSummary().TotalKWh, 0.0)
+
+	// Set a new time range — should reset energy and seek to new start
+	newStart := startTime.Add(2 * hour)
+	newEnd := startTime.Add(4 * hour)
+	newRange := model.TimeRange{Start: newStart, End: newEnd}
+	e.SetTimeRange(newRange)
+
+	tr := e.TimeRange()
+	assert.Equal(t, newStart, tr.Start)
+	assert.Equal(t, newEnd, tr.End)
+	assert.Equal(t, newStart, e.State().Time)
+	// Energy should be reset
+	assert.InDelta(t, 0.0, cb.lastSummary().TotalKWh, 0.001)
+}
+
+func TestEngine_SetTimeRange_ResetsAndReplays(t *testing.T) {
+	s := makeStore([]float64{100, 200, 300, 400, 500})
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+
+	// Narrow the time range
+	newRange := model.TimeRange{
+		Start: startTime.Add(1 * hour),
+		End:   startTime.Add(3 * hour),
+	}
+	e.SetTimeRange(newRange)
+
+	// Step through new range
+	e.Step(3 * hour)
+
+	// Should have readings from the narrowed range (200, 300, 400)
+	readings := cb.allReadings()
+	found := false
+	for _, r := range readings {
+		if r.Value == 300.0 {
+			found = true
+		}
+	}
+	assert.True(t, found, "should find readings within new time range")
+	assert.Equal(t, newRange.End, e.State().Time)
+}
+
 func TestStartOfDay(t *testing.T) {
 	ts := time.Date(2024, 11, 21, 15, 30, 45, 0, time.UTC)
 	assert.Equal(t, time.Date(2024, 11, 21, 0, 0, 0, 0, time.UTC), startOfDay(ts))
