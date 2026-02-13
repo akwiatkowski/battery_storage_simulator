@@ -1,42 +1,49 @@
-# sv
+# Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Svelte 5 + SvelteKit dashboard for the energy simulator. Communicates with the backend exclusively via WebSocket.
 
-## Creating a project
+## Development
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
+```bash
+make install-frontend   # npm install
+make dev-frontend       # vite dev server on :5173
+make test-frontend      # vitest
+make lint-frontend      # eslint + prettier
 ```
 
-To recreate this project with the same configuration:
+## Stack
 
-```sh
-# recreate this project
-npx sv create --template minimal --types ts --no-install frontend
+- **Svelte 5** with SvelteKit (static adapter for production)
+- **layerchart** + D3 for time-series charts and heatmaps
+- **TypeScript** throughout
+- **vitest** + `@testing-library/svelte` for testing
+
+## Structure
+
+```
+src/
+  lib/
+    ws/            WebSocket client + message types
+    stores/        Svelte 5 reactive state (simulation, daily records)
+    components/    Dashboard UI components
+  routes/          SvelteKit pages
 ```
 
-## Developing
+## Key Components
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+| Component              | Description                                              |
+|------------------------|----------------------------------------------------------|
+| `HomeSchema.svelte`    | Live power flow diagram (grid, PV, battery, home)        |
+| `EnergySummary.svelte` | Energy totals, battery savings, off-grid %               |
+| `CostSummary.svelte`   | Energy costs, 3-way battery strategy comparison          |
+| `BatteryConfig.svelte` | Battery parameter controls (capacity, power, efficiency) |
+| `BatteryStats.svelte`  | Cycle count and power distribution stats                 |
+| `SoCHeatmap.svelte`    | Monthly state-of-charge distribution heatmap             |
+| `OffGridHeatmap.svelte` | Daily battery autonomy heatmap (GitHub calendar style)  |
 
-```sh
-npm run dev
+## Conventions
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- All WebSocket messages follow `{ type: "namespace:action", payload: {...} }`
+- Power values in watts (positive = grid import, negative = export)
+- Energy values in kWh
+- Imports from `$lib/` must not include `.ts` extension
