@@ -95,12 +95,13 @@ const (
 	TypeSimSetPrediction = "sim:set_prediction"
 
 	// Server -> Client
-	TypeSimState       = "sim:state"
-	TypeSensorReading  = "sensor:reading"
-	TypeSummaryUpdate  = "summary:update"
-	TypeDataLoaded     = "data:loaded"
-	TypeBatteryUpdate  = "battery:update"
-	TypeBatterySummary = "battery:summary"
+	TypeSimState          = "sim:state"
+	TypeSensorReading     = "sensor:reading"
+	TypeSummaryUpdate     = "summary:update"
+	TypeDataLoaded        = "data:loaded"
+	TypeBatteryUpdate     = "battery:update"
+	TypeBatterySummary    = "battery:summary"
+	TypeArbitrageDayLog   = "arbitrage:day_log"
 )
 
 type SetPredictionPayload struct {
@@ -150,6 +151,42 @@ func SimStateFromEngine(s simulator.State) SimStatePayload {
 		Speed:   s.Speed,
 		Running: s.Running,
 	}
+}
+
+type ArbitrageDayRecordPayload struct {
+	Date               string  `json:"date"`
+	ChargeStartTime    string  `json:"charge_start_time"`
+	ChargeEndTime      string  `json:"charge_end_time"`
+	ChargeKWh          float64 `json:"charge_kwh"`
+	DischargeStartTime string  `json:"discharge_start_time"`
+	DischargeEndTime   string  `json:"discharge_end_time"`
+	DischargeKWh       float64 `json:"discharge_kwh"`
+	GapMinutes         int     `json:"gap_minutes"`
+	CyclesDelta        float64 `json:"cycles_delta"`
+	EarningsPLN        float64 `json:"earnings_pln"`
+}
+
+type ArbitrageDayLogPayload struct {
+	Records []ArbitrageDayRecordPayload `json:"records"`
+}
+
+func ArbitrageDayLogFromEngine(records []simulator.ArbitrageDayRecord) ArbitrageDayLogPayload {
+	out := make([]ArbitrageDayRecordPayload, len(records))
+	for i, r := range records {
+		out[i] = ArbitrageDayRecordPayload{
+			Date:               r.Date,
+			ChargeStartTime:    r.ChargeStartTime,
+			ChargeEndTime:      r.ChargeEndTime,
+			ChargeKWh:          r.ChargeKWh,
+			DischargeStartTime: r.DischargeStartTime,
+			DischargeEndTime:   r.DischargeEndTime,
+			DischargeKWh:       r.DischargeKWh,
+			GapMinutes:         r.GapMinutes,
+			CyclesDelta:        r.CyclesDelta,
+			EarningsPLN:        r.EarningsPLN,
+		}
+	}
+	return ArbitrageDayLogPayload{Records: out}
 }
 
 func SummaryFromEngine(s simulator.Summary) SummaryPayload {

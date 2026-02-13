@@ -19,6 +19,7 @@ type mockCallback struct {
 	summaries        []Summary
 	batteryUpdates   []BatteryUpdate
 	batterySummaries []BatterySummary
+	arbitrageDayLogs [][]ArbitrageDayRecord
 }
 
 func (m *mockCallback) OnState(s State) {
@@ -49,6 +50,12 @@ func (m *mockCallback) OnBatterySummary(s BatterySummary) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.batterySummaries = append(m.batterySummaries, s)
+}
+
+func (m *mockCallback) OnArbitrageDayLog(records []ArbitrageDayRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.arbitrageDayLogs = append(m.arbitrageDayLogs, records)
 }
 
 func TestSummary_OffGridCoverage(t *testing.T) {
@@ -177,7 +184,10 @@ func TestEngine_SetSpeed(t *testing.T) {
 	assert.Equal(t, 0.1, e.State().Speed)
 
 	e.SetSpeed(1000000)
-	assert.Equal(t, 604800.0, e.State().Speed)
+	assert.Equal(t, 1000000.0, e.State().Speed)
+
+	e.SetSpeed(5000000)
+	assert.Equal(t, 2592000.0, e.State().Speed)
 }
 
 func TestEngine_Seek(t *testing.T) {
@@ -659,6 +669,155 @@ func TestEngine_BatterySavings(t *testing.T) {
 	// With battery, adjusted grid = 0 for intervals 2+3 (backward-looking)
 	// Battery savings = rawImport - adjustedImport > 0
 	assert.Greater(t, summary.BatterySavingsKWh, 0.0)
+}
+
+func (m *mockCallback) lastArbitrageDayLog() []ArbitrageDayRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.arbitrageDayLogs) == 0 {
+		return nil
+	}
+	return m.arbitrageDayLogs[len(m.arbitrageDayLogs)-1]
+}
+
+func TestEngine_ArbitrageDayLog(t *testing.T) {
+	// 48 hours across 2 days with price data.
+	// Prices: hours 0-7 cheap (0.20), hours 8-23 expensive (0.80)
+	// Battery should charge during cheap hours and discharge during expensive hours.
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	base := time.Date(2024, 11, 21, 0, 0, 0, 0, time.UTC)
+	var gridReadings, priceReadings []model.Reading
+	for h := 0; h < 49; h++ { // 49 readings = 48 intervals
+		ts := base.Add(time.Duration(h) * hour)
+		gridReadings = append(gridReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 1000, Unit: "W",
+		})
+		price := 0.80
+		if h%24 < 8 {
+			price = 0.20
+		}
+		priceReadings = append(priceReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: price, Unit: "PLN/kWh",
+		})
+	}
+	s.AddReadings(gridReadings)
+	s.AddReadings(priceReadings)
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 10,
+		ChargeToPercent:    100,
+	})
+
+	// Step through all 48 hours
+	e.Step(49 * hour)
+
+	records := cb.lastArbitrageDayLog()
+	require.NotNil(t, records, "should have arbitrage day log records")
+	// Day boundary at hour 24 finalizes day 1; day 2 may not be finalized yet
+	// since finalizeArbitrageDay is called on day boundary crossing.
+	require.GreaterOrEqual(t, len(records), 1, "should have at least 1 completed day")
+
+	rec := records[0]
+	assert.Equal(t, "2024-11-21", rec.Date)
+	assert.NotEmpty(t, rec.ChargeStartTime, "should have charge start time")
+	assert.NotEmpty(t, rec.DischargeStartTime, "should have discharge start time")
+	assert.Greater(t, rec.CyclesDelta, 0.0, "should have cycles")
+	assert.Greater(t, rec.EarningsPLN, 0.0, "should have positive earnings from arbitrage")
+
+	t.Logf("Day record: date=%s charge=%s-%s discharge=%s-%s cycles=%.2f earnings=%.2f PLN",
+		rec.Date, rec.ChargeStartTime, rec.ChargeEndTime,
+		rec.DischargeStartTime, rec.DischargeEndTime,
+		rec.CyclesDelta, rec.EarningsPLN)
+}
+
+func TestEngine_ArbitrageDayLog_NonOverlappingWindowsAndGap(t *testing.T) {
+	// 48 hours across 2 days with price data that could cause interleaving:
+	// Hours 0-5: cheap (0.10) → charge
+	// Hours 6-7: mid (0.40) → hold
+	// Hours 8-15: expensive (0.90) → discharge
+	// Hours 16-19: mid (0.40) → hold
+	// Hours 20-23: cheap again (0.10) → would charge, but must not extend charge window
+	//
+	// The charge window should be [00:00, 05:00] and discharge [08:00, 15:00].
+	// Late-night cheap hours (20-23) must NOT create a second charge window or
+	// extend the existing one, because discharge has already started.
+	// Gap = 08:00 - 05:00 = 180 minutes (3h).
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	base := time.Date(2024, 11, 21, 0, 0, 0, 0, time.UTC)
+	var gridReadings, priceReadings []model.Reading
+	for h := 0; h < 49; h++ {
+		ts := base.Add(time.Duration(h) * hour)
+		gridReadings = append(gridReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 1000, Unit: "W",
+		})
+		hod := h % 24
+		var price float64
+		switch {
+		case hod < 6:
+			price = 0.10 // cheap → charge
+		case hod < 8:
+			price = 0.40 // mid → hold
+		case hod < 16:
+			price = 0.90 // expensive → discharge
+		case hod < 20:
+			price = 0.40 // mid → hold
+		default:
+			price = 0.10 // cheap again → would charge if allowed
+		}
+		priceReadings = append(priceReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: price, Unit: "PLN/kWh",
+		})
+	}
+	s.AddReadings(gridReadings)
+	s.AddReadings(priceReadings)
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 10,
+		ChargeToPercent:    100,
+	})
+
+	e.Step(49 * hour)
+
+	records := cb.lastArbitrageDayLog()
+	require.NotNil(t, records, "should have arbitrage day log records")
+	require.GreaterOrEqual(t, len(records), 1)
+
+	rec := records[0]
+	assert.Equal(t, "2024-11-21", rec.Date)
+
+	// Charge window must end before discharge window starts (non-overlapping)
+	assert.NotEmpty(t, rec.ChargeStartTime)
+	assert.NotEmpty(t, rec.ChargeEndTime)
+	assert.NotEmpty(t, rec.DischargeStartTime)
+	assert.NotEmpty(t, rec.DischargeEndTime)
+	assert.Less(t, rec.ChargeEndTime, rec.DischargeStartTime,
+		"charge window must end before discharge window starts")
+
+	// Gap should be > 0 when both windows exist
+	assert.Greater(t, rec.GapMinutes, 0, "gap between charge end and discharge start should be positive")
+
+	t.Logf("Day record: date=%s charge=%s-%s discharge=%s-%s gap=%dm cycles=%.2f earnings=%.2f PLN",
+		rec.Date, rec.ChargeStartTime, rec.ChargeEndTime,
+		rec.DischargeStartTime, rec.DischargeEndTime,
+		rec.GapMinutes, rec.CyclesDelta, rec.EarningsPLN)
 }
 
 func TestEngine_BatteryFullSimulation(t *testing.T) {

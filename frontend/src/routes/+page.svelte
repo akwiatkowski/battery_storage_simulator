@@ -9,6 +9,7 @@
 	import BatteryStats from '$lib/components/BatteryStats.svelte';
 	import SoCHeatmap from '$lib/components/SoCHeatmap.svelte';
 	import OffGridHeatmap from '$lib/components/OffGridHeatmap.svelte';
+	import ArbitrageLog from '$lib/components/ArbitrageLog.svelte';
 
 	onMount(() => {
 		simulation.init();
@@ -85,6 +86,7 @@
 	</div>
 
 	<OffGridHeatmap />
+	<ArbitrageLog />
 </div>
 
 <style>

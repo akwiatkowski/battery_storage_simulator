@@ -6,10 +6,12 @@ import {
 	MSG_SENSOR_READING,
 	MSG_SUMMARY_UPDATE,
 	MSG_DATA_LOADED,
+	MSG_ARBITRAGE_DAY_LOG,
 	type SimStatePayload,
 	type SensorReadingPayload,
 	type SummaryPayload,
-	type DataLoadedPayload
+	type DataLoadedPayload,
+	type ArbitrageDayLogPayload
 } from '$lib/ws/messages';
 
 describe('Message types', () => {
@@ -73,6 +75,32 @@ describe('Message payload types', () => {
 			arb_battery_savings_pln: 35.0
 		};
 		expect(payload.today_kwh).toBe(12.3);
+	});
+
+	it('ArbitrageDayLogPayload has correct shape', () => {
+		const payload: ArbitrageDayLogPayload = {
+			records: [
+				{
+					date: '2024-11-21',
+					charge_start_time: '01:00',
+					charge_end_time: '06:00',
+					charge_kwh: 8.5,
+					discharge_start_time: '14:00',
+					discharge_end_time: '19:00',
+					discharge_kwh: 7.2,
+					gap_minutes: 480,
+					cycles_delta: 0.85,
+					earnings_pln: 2.3
+				}
+			]
+		};
+		expect(payload.records).toHaveLength(1);
+		expect(payload.records[0].date).toBe('2024-11-21');
+		expect(payload.records[0].earnings_pln).toBe(2.3);
+	});
+
+	it('has correct arbitrage day log message type', () => {
+		expect(MSG_ARBITRAGE_DAY_LOG).toBe('arbitrage:day_log');
 	});
 
 	it('DataLoadedPayload has correct shape', () => {

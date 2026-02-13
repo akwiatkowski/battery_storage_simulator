@@ -21,6 +21,7 @@ export const MSG_SUMMARY_UPDATE = 'summary:update';
 export const MSG_DATA_LOADED = 'data:loaded';
 export const MSG_BATTERY_UPDATE = 'battery:update';
 export const MSG_BATTERY_SUMMARY = 'battery:summary';
+export const MSG_ARBITRAGE_DAY_LOG = 'arbitrage:day_log';
 
 export interface SetSpeedPayload {
 	speed: number;
@@ -112,4 +113,21 @@ export interface BatterySummaryPayload {
 	time_at_power_sec: Record<string, number>;
 	time_at_soc_pct_sec: Record<string, number>;
 	month_soc_seconds: Record<string, Record<string, number>>;
+}
+
+export interface ArbitrageDayRecord {
+	date: string;
+	charge_start_time: string;
+	charge_end_time: string;
+	charge_kwh: number;
+	discharge_start_time: string;
+	discharge_end_time: string;
+	discharge_kwh: number;
+	gap_minutes: number;
+	cycles_delta: number;
+	earnings_pln: number;
+}
+
+export interface ArbitrageDayLogPayload {
+	records: ArbitrageDayRecord[];
 }

@@ -81,6 +81,21 @@ type BatteryUpdate struct {
 	Timestamp     string  `json:"timestamp"`
 }
 
+// ArbitrageDayRecord captures one day of arbitrage battery activity.
+// Charge and discharge windows are guaranteed non-overlapping: charge first, then discharge.
+type ArbitrageDayRecord struct {
+	Date               string  `json:"date"`
+	ChargeStartTime    string  `json:"charge_start_time"`
+	ChargeEndTime      string  `json:"charge_end_time"`
+	ChargeKWh          float64 `json:"charge_kwh"`
+	DischargeStartTime string  `json:"discharge_start_time"`
+	DischargeEndTime   string  `json:"discharge_end_time"`
+	DischargeKWh       float64 `json:"discharge_kwh"`
+	GapMinutes         int     `json:"gap_minutes"`
+	CyclesDelta        float64 `json:"cycles_delta"`
+	EarningsPLN        float64 `json:"earnings_pln"`
+}
+
 // Callback receives simulation events.
 type Callback interface {
 	OnState(state State)
@@ -88,6 +103,7 @@ type Callback interface {
 	OnSummary(summary Summary)
 	OnBatteryUpdate(update BatteryUpdate)
 	OnBatterySummary(summary BatterySummary)
+	OnArbitrageDayLog(records []ArbitrageDayRecord)
 }
 
 // Engine replays historical sensor data at configurable speed.
@@ -113,6 +129,16 @@ type Engine struct {
 	arbThresholdDay  time.Time
 	arbLowThreshold  float64
 	arbHighThreshold float64
+
+	// Arbitrage day log tracking
+	arbitrageDayRecords                                            []ArbitrageDayRecord
+	arbitrageDayLogDirty                                           bool
+	arbitrageCurrentDay                                            string
+	arbitrageDayChargeWh, arbitrageDayDischargeWh                  float64
+	arbitrageDayChargeStart, arbitrageDayChargeEnd                 string
+	arbitrageDayDischargeStart, arbitrageDayDischargeEnd           string
+	arbitrageDayStartThroughputWh                                  float64
+	arbitrageDayStartRawNetCost, arbitrageDayStartArbNetCost       float64
 
 	// Prediction mode
 	predictionMode bool
@@ -210,8 +236,8 @@ func (e *Engine) SetSpeed(speed float64) {
 	if speed < 0.1 {
 		speed = 0.1
 	}
-	if speed > 604800 {
-		speed = 604800
+	if speed > 2592000 {
+		speed = 2592000
 	}
 
 	e.mu.Lock()
@@ -325,6 +351,18 @@ func (e *Engine) resetAccumulators() {
 	e.arbThresholdDay = time.Time{}
 	e.arbLowThreshold = 0
 	e.arbHighThreshold = 0
+	e.arbitrageDayRecords = nil
+	e.arbitrageDayLogDirty = false
+	e.arbitrageCurrentDay = ""
+	e.arbitrageDayChargeWh = 0
+	e.arbitrageDayDischargeWh = 0
+	e.arbitrageDayChargeStart = ""
+	e.arbitrageDayChargeEnd = ""
+	e.arbitrageDayDischargeStart = ""
+	e.arbitrageDayDischargeEnd = ""
+	e.arbitrageDayStartThroughputWh = 0
+	e.arbitrageDayStartRawNetCost = 0
+	e.arbitrageDayStartArbNetCost = 0
 	e.lastReadings = make(map[string]model.Reading)
 	if e.battery != nil {
 		e.battery.Reset()
@@ -516,6 +554,7 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 						arbAdjusted := r
 						arbAdjusted.Value = arbResult.AdjustedGridW
 						e.updateArbGridEnergy(arbAdjusted)
+						e.trackArbitrageDay(arbResult.BatteryPowerW, r.Timestamp)
 					}
 				}
 			} else {
@@ -731,6 +770,111 @@ func (e *Engine) broadcastState() {
 	e.callback.OnState(s)
 }
 
+// trackArbitrageDay accumulates per-day arbitrage stats.
+// Called after altBat.ProcessArbitrage() in emitReadings.
+func (e *Engine) trackArbitrageDay(batteryPowerW float64, ts time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	day := ts.Format("2006-01-02")
+	hhmm := ts.Format("15:04")
+
+	// Day boundary crossed — finalize previous day
+	if e.arbitrageCurrentDay != "" && day != e.arbitrageCurrentDay {
+		e.finalizeArbitrageDay()
+	}
+
+	// New day — reset accumulators and snapshot cumulative values
+	if e.arbitrageCurrentDay != day {
+		e.arbitrageCurrentDay = day
+		e.arbitrageDayChargeWh = 0
+		e.arbitrageDayDischargeWh = 0
+		e.arbitrageDayChargeStart = ""
+		e.arbitrageDayChargeEnd = ""
+		e.arbitrageDayDischargeStart = ""
+		e.arbitrageDayDischargeEnd = ""
+		if e.altBattery != nil {
+			e.arbitrageDayStartThroughputWh = e.altBattery.TotalThroughputWh
+		}
+		e.arbitrageDayStartRawNetCost = e.rawGridImportCostPLN - e.rawGridExportRevenuePLN
+		e.arbitrageDayStartArbNetCost = e.arbGridImportCostPLN - e.arbGridExportRevenuePLN
+	}
+
+	// Track charge/discharge windows as non-overlapping phases:
+	// charge phase first, then discharge phase (no interleaving).
+	if batteryPowerW < 0 {
+		// Charging — only extend charge window if discharge hasn't started
+		if e.arbitrageDayDischargeStart == "" {
+			if e.arbitrageDayChargeStart == "" {
+				e.arbitrageDayChargeStart = hhmm
+			}
+			e.arbitrageDayChargeEnd = hhmm
+		}
+	} else if batteryPowerW > 0 {
+		// Discharging
+		if e.arbitrageDayDischargeStart == "" {
+			e.arbitrageDayDischargeStart = hhmm
+		}
+		e.arbitrageDayDischargeEnd = hhmm
+	}
+}
+
+// finalizeArbitrageDay builds an ArbitrageDayRecord for the completed day.
+// Must be called with mu held.
+func (e *Engine) finalizeArbitrageDay() {
+	if e.arbitrageCurrentDay == "" || e.altBattery == nil {
+		return
+	}
+
+	capacityWh := e.altBattery.config.CapacityKWh * 1000
+	throughputDelta := e.altBattery.TotalThroughputWh - e.arbitrageDayStartThroughputWh
+	var cyclesDelta float64
+	if capacityWh > 0 {
+		cyclesDelta = throughputDelta / 2 / capacityWh
+	}
+
+	rawNetCostNow := e.rawGridImportCostPLN - e.rawGridExportRevenuePLN
+	arbNetCostNow := e.arbGridImportCostPLN - e.arbGridExportRevenuePLN
+	rawDelta := rawNetCostNow - e.arbitrageDayStartRawNetCost
+	arbDelta := arbNetCostNow - e.arbitrageDayStartArbNetCost
+	earnings := rawDelta - arbDelta
+
+	// Compute charge/discharge kWh from throughput: split by direction
+	// throughputDelta is total abs energy. We can approximate using the
+	// battery's charge/discharge split, but simpler: use half each if we
+	// don't track separately. Actually let's compute from the time ranges.
+	// Since we don't track energy per direction in the day tracker,
+	// we'll use throughput/2 for each (one full cycle = charge + discharge of same energy).
+	chargeKWh := throughputDelta / 2 / 1000
+	dischargeKWh := throughputDelta / 2 / 1000
+
+	// Compute gap between charge end and discharge start
+	var gapMinutes int
+	if e.arbitrageDayChargeEnd != "" && e.arbitrageDayDischargeStart != "" {
+		chEnd, err1 := time.Parse("15:04", e.arbitrageDayChargeEnd)
+		dsStart, err2 := time.Parse("15:04", e.arbitrageDayDischargeStart)
+		if err1 == nil && err2 == nil {
+			gapMinutes = int(dsStart.Sub(chEnd).Minutes())
+		}
+	}
+
+	rec := ArbitrageDayRecord{
+		Date:               e.arbitrageCurrentDay,
+		ChargeStartTime:    e.arbitrageDayChargeStart,
+		ChargeEndTime:      e.arbitrageDayChargeEnd,
+		ChargeKWh:          chargeKWh,
+		DischargeStartTime: e.arbitrageDayDischargeStart,
+		DischargeEndTime:   e.arbitrageDayDischargeEnd,
+		DischargeKWh:       dischargeKWh,
+		GapMinutes:         gapMinutes,
+		CyclesDelta:        cyclesDelta,
+		EarningsPLN:        earnings,
+	}
+
+	e.arbitrageDayRecords = append(e.arbitrageDayRecords, rec)
+	e.arbitrageDayLogDirty = true
+}
+
 func (e *Engine) broadcastSummary() {
 	e.mu.Lock()
 	pvKWh := e.pvWh / 1000
@@ -803,6 +947,20 @@ func (e *Engine) broadcastSummary() {
 	e.callback.OnSummary(s)
 	if bat != nil {
 		e.callback.OnBatterySummary(bat.Summary())
+	}
+
+	// Broadcast arb day log if dirty
+	e.mu.Lock()
+	dirty := e.arbitrageDayLogDirty
+	var arbRecords []ArbitrageDayRecord
+	if dirty {
+		arbRecords = make([]ArbitrageDayRecord, len(e.arbitrageDayRecords))
+		copy(arbRecords, e.arbitrageDayRecords)
+		e.arbitrageDayLogDirty = false
+	}
+	e.mu.Unlock()
+	if dirty {
+		e.callback.OnArbitrageDayLog(arbRecords)
 	}
 }
 

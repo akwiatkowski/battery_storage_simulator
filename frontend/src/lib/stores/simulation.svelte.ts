@@ -6,6 +6,7 @@ import {
 	MSG_DATA_LOADED,
 	MSG_BATTERY_UPDATE,
 	MSG_BATTERY_SUMMARY,
+	MSG_ARBITRAGE_DAY_LOG,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
@@ -19,6 +20,8 @@ import {
 	type DataLoadedPayload,
 	type BatteryUpdatePayload,
 	type BatterySummaryPayload,
+	type ArbitrageDayLogPayload,
+	type ArbitrageDayRecord,
 	type SensorInfo,
 	type Envelope
 } from '$lib/ws/messages';
@@ -113,6 +116,9 @@ class SimulationStore {
 	batteryTimeAtSoCPctSec = $state<Record<string, number>>({});
 	batteryMonthSoCSeconds = $state<Record<string, Record<string, number>>>({});
 
+	// Arbitrage day log
+	arbitrageDayRecords = $state<ArbitrageDayRecord[]>([]);
+
 	// Daily off-grid tracking
 	dailyRecords = $state<DailyRecord[]>([]);
 	private currentDayKey = '';
@@ -171,6 +177,7 @@ class SimulationStore {
 		this.client?.send(MSG_SIM_SEEK, { timestamp });
 		this.chartData = [];
 		this.dailyRecords = [];
+		this.arbitrageDayRecords = [];
 		this.currentDayKey = '';
 	}
 
@@ -179,6 +186,7 @@ class SimulationStore {
 		this.client?.send(MSG_SIM_SET_SOURCE, { source });
 		this.chartData = [];
 		this.dailyRecords = [];
+		this.arbitrageDayRecords = [];
 		this.currentDayKey = '';
 	}
 
@@ -198,6 +206,7 @@ class SimulationStore {
 		});
 		this.chartData = [];
 		this.dailyRecords = [];
+		this.arbitrageDayRecords = [];
 		this.currentDayKey = '';
 	}
 
@@ -205,6 +214,7 @@ class SimulationStore {
 		this.client?.send(MSG_SIM_SET_PREDICTION, { enabled: this.predictionEnabled });
 		this.chartData = [];
 		this.dailyRecords = [];
+		this.arbitrageDayRecords = [];
 		this.currentDayKey = '';
 	}
 
@@ -284,6 +294,11 @@ class SimulationStore {
 				this.batteryTimeAtPowerSec = p.time_at_power_sec;
 				this.batteryTimeAtSoCPctSec = p.time_at_soc_pct_sec;
 				this.batteryMonthSoCSeconds = p.month_soc_seconds ?? {};
+				break;
+			}
+			case MSG_ARBITRAGE_DAY_LOG: {
+				const p = envelope.payload as ArbitrageDayLogPayload;
+				this.arbitrageDayRecords = p.records;
 				break;
 			}
 			case MSG_DATA_LOADED: {

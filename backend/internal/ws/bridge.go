@@ -75,3 +75,12 @@ func (b *Bridge) OnBatterySummary(s simulator.BatterySummary) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnArbitrageDayLog(records []simulator.ArbitrageDayRecord) {
+	msg, err := NewEnvelope(TypeArbitrageDayLog, ArbitrageDayLogFromEngine(records))
+	if err != nil {
+		log.Printf("Error marshaling arbitrage day log: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

@@ -23,11 +23,12 @@ type collector struct {
 	batterySummary simulator.BatterySummary
 }
 
-func (c *collector) OnState(simulator.State)              {}
-func (c *collector) OnReading(simulator.SensorReading)     {}
-func (c *collector) OnSummary(s simulator.Summary)         { c.summary = s }
-func (c *collector) OnBatteryUpdate(simulator.BatteryUpdate) {}
-func (c *collector) OnBatterySummary(s simulator.BatterySummary) { c.batterySummary = s }
+func (c *collector) OnState(simulator.State)                        {}
+func (c *collector) OnReading(simulator.SensorReading)               {}
+func (c *collector) OnSummary(s simulator.Summary)                   { c.summary = s }
+func (c *collector) OnBatteryUpdate(simulator.BatteryUpdate)         {}
+func (c *collector) OnBatterySummary(s simulator.BatterySummary)     { c.batterySummary = s }
+func (c *collector) OnArbitrageDayLog([]simulator.ArbitrageDayRecord) {}
 
 type result struct {
 	capacity float64

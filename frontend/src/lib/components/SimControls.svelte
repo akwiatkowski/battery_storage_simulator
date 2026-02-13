@@ -7,7 +7,8 @@
 		{ value: 14400, label: '4 h/s' },
 		{ value: 28800, label: '8 h/s' },
 		{ value: 86400, label: '1 d/s' },
-		{ value: 604800, label: '1 w/s' }
+		{ value: 604800, label: '1 w/s' },
+		{ value: 2592000, label: '1 mo/s' }
 	];
 
 	function togglePlayPause() {
