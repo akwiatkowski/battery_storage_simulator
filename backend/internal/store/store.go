@@ -42,14 +42,26 @@ func (s *Store) AddReadings(readings []model.Reading) {
 		s.readings[r.SensorID] = append(s.readings[r.SensorID], r)
 	}
 
-	// Sort each affected sensor's readings
+	// Sort and deduplicate each affected sensor's readings.
 	seen := make(map[string]bool)
 	for _, r := range readings {
 		if !seen[r.SensorID] {
 			seen[r.SensorID] = true
-			sort.Slice(s.readings[r.SensorID], func(i, j int) bool {
-				return s.readings[r.SensorID][i].Timestamp.Before(s.readings[r.SensorID][j].Timestamp)
+			all := s.readings[r.SensorID]
+			sort.Slice(all, func(i, j int) bool {
+				return all[i].Timestamp.Before(all[j].Timestamp)
 			})
+			// Remove duplicates: keep last value for each timestamp.
+			n := 0
+			for i := range all {
+				if n > 0 && all[i].Timestamp.Equal(all[n-1].Timestamp) {
+					all[n-1] = all[i] // overwrite with later-loaded value
+				} else {
+					all[n] = all[i]
+					n++
+				}
+			}
+			s.readings[r.SensorID] = all[:n]
 		}
 	}
 }

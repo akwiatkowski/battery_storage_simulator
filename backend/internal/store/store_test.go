@@ -137,6 +137,24 @@ func TestStore_GlobalTimeRange_NonOverlapping(t *testing.T) {
 	assert.Equal(t, startTime.Add(11*hour), tr.End)
 }
 
+func TestStore_AddReadingsDedup(t *testing.T) {
+	s := New()
+
+	// Simulate overlapping CSV exports: batch1 covers hours 0-2, batch2 covers hours 1-3.
+	batch1 := makeReadings(sensorID, []float64{100, 200, 300}, startTime, hour)
+	batch2 := makeReadings(sensorID, []float64{250, 350, 400}, startTime.Add(hour), hour)
+	s.AddReadings(batch1)
+	s.AddReadings(batch2)
+
+	// Overlapping hours 1 and 2 should be deduped (last-loaded wins).
+	result := s.ReadingsInRange(sensorID, startTime, startTime.Add(4*hour))
+	require.Len(t, result, 4)
+	assert.InDelta(t, 100.0, result[0].Value, 0.001) // hour 0: only in batch1
+	assert.InDelta(t, 250.0, result[1].Value, 0.001) // hour 1: batch2 overwrites batch1
+	assert.InDelta(t, 350.0, result[2].Value, 0.001) // hour 2: batch2 overwrites batch1
+	assert.InDelta(t, 400.0, result[3].Value, 0.001) // hour 3: only in batch2
+}
+
 func TestStore_AddReadingsUnsorted(t *testing.T) {
 	s := New()
 
