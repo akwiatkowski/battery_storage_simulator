@@ -2,9 +2,9 @@
 MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
 export PATH := $(MISE_PATHS)$(PATH)
 
-.PHONY: run-backend build-backend build-battery-compare build-train-predictor build-sample-predict test-backend test-backend-v lint-backend \
+.PHONY: run-backend build-backend build-battery-compare build-train-predictor build-sample-predict build-fetch-prices test-backend test-backend-v lint-backend \
        install-frontend dev-frontend build-frontend test-frontend lint-frontend \
-       dev test lint build clean compare train sample-predict \
+       dev test lint build clean compare train sample-predict fetch-prices \
        docker-build docker-up docker-down \
        sql-stats
 
@@ -35,6 +35,12 @@ build-sample-predict:
 
 sample-predict: build-sample-predict
 	./bin/sample-predict -temp-model model/temperature.json -power-model model/grid_power.json
+
+build-fetch-prices:
+	cd backend && go build -o ../bin/fetch-prices ./cmd/fetch-prices
+
+fetch-prices: build-fetch-prices
+	./bin/fetch-prices
 
 test-backend:
 	cd backend && go test ./...
