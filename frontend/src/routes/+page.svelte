@@ -3,6 +3,7 @@
 	import { simulation } from '$lib/stores/simulation.svelte';
 	import SimControls from '$lib/components/SimControls.svelte';
 	import EnergySummary from '$lib/components/EnergySummary.svelte';
+	import CostSummary from '$lib/components/CostSummary.svelte';
 	import HomeSchema from '$lib/components/HomeSchema.svelte';
 	import BatteryConfig from '$lib/components/BatteryConfig.svelte';
 	import BatteryStats from '$lib/components/BatteryStats.svelte';
@@ -35,6 +36,10 @@
 		return `Day ${elapsed} of ${total}`;
 	});
 
+	let hasCostData = $derived(
+		simulation.gridImportCostPLN > 0 || simulation.gridExportRevenuePLN > 0
+	);
+
 	function handleReset() {
 		simulation.reset();
 	}
@@ -59,13 +64,19 @@
 		{/if}
 	</header>
 
+	<SimControls />
 	<HomeSchema />
-	<EnergySummary />
+
+	<div class="summary-grid" class:two-col={hasCostData}>
+		<EnergySummary />
+		{#if hasCostData}
+			<CostSummary />
+		{/if}
+	</div>
 
 	<div class="bottom-row">
 		<div class="left-col">
 			<BatteryConfig />
-			<SimControls />
 		</div>
 		<div class="right-col">
 			<BatteryStats />
@@ -79,7 +90,7 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #fff;
+		background: #f8fafc;
 		color: #222;
 		font-family:
 			-apple-system,
@@ -90,12 +101,12 @@
 	}
 
 	.dashboard {
-		max-width: 900px;
+		max-width: 1100px;
 		margin: 0 auto;
 		padding: 24px;
 		display: flex;
 		flex-direction: column;
-		gap: 20px;
+		gap: 16px;
 	}
 
 	header {
@@ -152,15 +163,25 @@
 		color: #475569;
 	}
 
+	.summary-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 16px;
+	}
+
+	.summary-grid.two-col {
+		grid-template-columns: 1fr 1fr;
+	}
+
 	.bottom-row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 20px;
+		gap: 16px;
 	}
 
 	.left-col, .right-col {
 		display: flex;
 		flex-direction: column;
-		gap: 20px;
+		gap: 16px;
 	}
 </style>

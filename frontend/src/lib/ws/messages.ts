@@ -59,6 +59,17 @@ export interface SummaryPayload {
 	self_consumption_kwh: number;
 	home_demand_kwh: number;
 	battery_savings_kwh: number;
+
+	grid_import_cost_pln: number;
+	grid_export_revenue_pln: number;
+	net_cost_pln: number;
+	raw_grid_import_cost_pln: number;
+	raw_grid_export_revenue_pln: number;
+	raw_net_cost_pln: number;
+	battery_savings_pln: number;
+
+	arb_net_cost_pln: number;
+	arb_battery_savings_pln: number;
 }
 
 export interface SensorInfo {

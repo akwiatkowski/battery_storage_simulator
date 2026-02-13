@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -29,6 +30,19 @@ type Summary struct {
 	SelfConsumptionKWh float64 `json:"self_consumption_kwh"`
 	HomeDemandKWh      float64 `json:"home_demand_kwh"`
 	BatterySavingsKWh  float64 `json:"battery_savings_kwh"`
+
+	// Cost tracking (PLN)
+	GridImportCostPLN    float64 `json:"grid_import_cost_pln"`
+	GridExportRevenuePLN float64 `json:"grid_export_revenue_pln"`
+	NetCostPLN           float64 `json:"net_cost_pln"`
+	RawGridImportCostPLN    float64 `json:"raw_grid_import_cost_pln"`
+	RawGridExportRevenuePLN float64 `json:"raw_grid_export_revenue_pln"`
+	RawNetCostPLN           float64 `json:"raw_net_cost_pln"`
+	BatterySavingsPLN       float64 `json:"battery_savings_pln"`
+
+	// Arbitrage strategy comparison
+	ArbNetCostPLN        float64 `json:"arb_net_cost_pln"`
+	ArbBatterySavingsPLN float64 `json:"arb_battery_savings_pln"`
 }
 
 // OffGridCoverage returns the percentage of adjusted home demand that could be
@@ -88,7 +102,17 @@ type Engine struct {
 	timeRange model.TimeRange
 
 	// Battery simulation (nil when disabled)
-	battery *Battery
+	battery    *Battery
+	altBattery *Battery // arbitrage shadow (nil when battery disabled)
+
+	// Arbitrage cost tracking
+	arbGridImportWh, arbGridExportWh             float64
+	arbGridImportCostPLN, arbGridExportRevenuePLN float64
+
+	// Price threshold cache (per day)
+	arbThresholdDay  time.Time
+	arbLowThreshold  float64
+	arbHighThreshold float64
 
 	// Prediction mode
 	predictionMode bool
@@ -107,6 +131,11 @@ type Engine struct {
 	pvWh, heatPumpWh, heatPumpProdWh float64
 	gridImportWh, gridExportWh       float64
 	rawGridImportWh, rawGridExportWh float64 // before battery adjustment
+
+	// Energy cost tracking (PLN)
+	priceSensorID                                string
+	gridImportCostPLN, gridExportRevenuePLN      float64
+	rawGridImportCostPLN, rawGridExportRevenuePLN float64
 
 	stopCh chan struct{}
 }
@@ -197,8 +226,10 @@ func (e *Engine) SetBattery(cfg *BatteryConfig) {
 	e.mu.Lock()
 	if cfg == nil {
 		e.battery = nil
+		e.altBattery = nil
 	} else {
 		e.battery = NewBattery(*cfg)
+		e.altBattery = NewBattery(*cfg)
 	}
 	e.mu.Unlock()
 }
@@ -243,6 +274,25 @@ func (e *Engine) SetPredictionMode(enabled bool) {
 	e.broadcastSummary()
 }
 
+// SetPriceSensor configures the sensor used for spot price lookups.
+func (e *Engine) SetPriceSensor(sensorID string) {
+	e.mu.Lock()
+	e.priceSensorID = sensorID
+	e.mu.Unlock()
+}
+
+// spotPrice returns the spot price at the given time. Must be called with mu held.
+func (e *Engine) spotPrice(t time.Time) float64 {
+	if e.priceSensorID == "" {
+		return 0
+	}
+	r, ok := e.store.ReadingAt(e.priceSensorID, t)
+	if !ok {
+		return 0
+	}
+	return r.Value
+}
+
 // PredictionMode returns whether prediction mode is active.
 func (e *Engine) PredictionMode() bool {
 	e.mu.Lock()
@@ -264,9 +314,23 @@ func (e *Engine) resetAccumulators() {
 	e.gridExportWh = 0
 	e.rawGridImportWh = 0
 	e.rawGridExportWh = 0
+	e.gridImportCostPLN = 0
+	e.gridExportRevenuePLN = 0
+	e.rawGridImportCostPLN = 0
+	e.rawGridExportRevenuePLN = 0
+	e.arbGridImportWh = 0
+	e.arbGridExportWh = 0
+	e.arbGridImportCostPLN = 0
+	e.arbGridExportRevenuePLN = 0
+	e.arbThresholdDay = time.Time{}
+	e.arbLowThreshold = 0
+	e.arbHighThreshold = 0
 	e.lastReadings = make(map[string]model.Reading)
 	if e.battery != nil {
 		e.battery.Reset()
+	}
+	if e.altBattery != nil {
+		e.altBattery.Reset()
 	}
 }
 
@@ -422,6 +486,8 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 			// When battery is active, process grid_power through battery
 			e.mu.Lock()
 			bat := e.battery
+			altBat := e.altBattery
+			priceSensor := e.priceSensorID
 			e.mu.Unlock()
 
 			if bat != nil && r.Type == model.SensorGridPower {
@@ -437,6 +503,21 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 				adjusted := r
 				adjusted.Value = result.AdjustedGridW
 				e.updateEnergy(adjusted)
+
+				// Shadow arbitrage battery
+				if altBat != nil && priceSensor != "" {
+					low, high := e.priceThresholds(r.Timestamp)
+					if low != high {
+						var price float64
+						if pr, ok := e.store.ReadingAt(priceSensor, r.Timestamp); ok {
+							price = pr.Value
+						}
+						arbResult := altBat.ProcessArbitrage(r.Value, r.Timestamp, price, low, high)
+						arbAdjusted := r
+						arbAdjusted.Value = arbResult.AdjustedGridW
+						e.updateArbGridEnergy(arbAdjusted)
+					}
+				}
 			} else {
 				if r.Type == model.SensorGridPower {
 					e.updateRawGridEnergy(r)
@@ -502,8 +583,10 @@ func (e *Engine) updateEnergy(r model.Reading) {
 	switch r.Type {
 	case model.SensorGridPower:
 		// Split into import (positive) and export (negative)
+		price := e.spotPrice(r.Timestamp)
 		if wh > 0 {
 			e.gridImportWh += wh
+			e.gridImportCostPLN += (wh / 1000) * price
 
 			newDay := startOfDay(r.Timestamp)
 			if newDay.After(e.dayStart) {
@@ -520,6 +603,7 @@ func (e *Engine) updateEnergy(r model.Reading) {
 			e.totalWh += wh
 		} else if wh < 0 {
 			e.gridExportWh += -wh
+			e.gridExportRevenuePLN += (-wh / 1000) * price
 		}
 	case model.SensorPVPower:
 		if wh > 0 {
@@ -554,10 +638,83 @@ func (e *Engine) updateRawGridEnergy(r model.Reading) {
 	avgPower := (last.Value + r.Value) / 2
 	wh := avgPower * hours
 
+	price := e.spotPrice(r.Timestamp)
 	if wh > 0 {
 		e.rawGridImportWh += wh
+		e.rawGridImportCostPLN += (wh / 1000) * price
 	} else if wh < 0 {
 		e.rawGridExportWh += -wh
+		e.rawGridExportRevenuePLN += (-wh / 1000) * price
+	}
+
+	e.lastReadings[key] = r
+}
+
+// priceThresholds returns daily P33/P67 price thresholds for arbitrage.
+// Returns (0, 0) if no price data available, which makes low == high and skips arb.
+func (e *Engine) priceThresholds(t time.Time) (low, high float64) {
+	day := startOfDay(t)
+
+	e.mu.Lock()
+	if day.Equal(e.arbThresholdDay) {
+		low, high = e.arbLowThreshold, e.arbHighThreshold
+		e.mu.Unlock()
+		return
+	}
+	priceSensor := e.priceSensorID
+	e.mu.Unlock()
+
+	if priceSensor == "" {
+		return 0, 0
+	}
+
+	dayEnd := day.Add(24 * time.Hour)
+	readings := e.store.ReadingsInRange(priceSensor, day, dayEnd)
+	if len(readings) == 0 {
+		return 0, 0
+	}
+
+	prices := make([]float64, len(readings))
+	for i, r := range readings {
+		prices[i] = r.Value
+	}
+	sort.Float64s(prices)
+
+	n := len(prices)
+	p33 := prices[(n-1)*33/100]
+	p67 := prices[(n-1)*67/100]
+
+	e.mu.Lock()
+	e.arbThresholdDay = day
+	e.arbLowThreshold = p33
+	e.arbHighThreshold = p67
+	e.mu.Unlock()
+
+	return p33, p67
+}
+
+func (e *Engine) updateArbGridEnergy(r model.Reading) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := r.SensorID + ":arb"
+	last, exists := e.lastReadings[key]
+	if !exists {
+		e.lastReadings[key] = r
+		return
+	}
+
+	hours := r.Timestamp.Sub(last.Timestamp).Hours()
+	avgPower := (last.Value + r.Value) / 2
+	wh := avgPower * hours
+
+	price := e.spotPrice(r.Timestamp)
+	if wh > 0 {
+		e.arbGridImportWh += wh
+		e.arbGridImportCostPLN += (wh / 1000) * price
+	} else if wh < 0 {
+		e.arbGridExportWh += -wh
+		e.arbGridExportRevenuePLN += (-wh / 1000) * price
 	}
 
 	e.lastReadings[key] = r
@@ -597,6 +754,25 @@ func (e *Engine) broadcastSummary() {
 		}
 	}
 
+	netCost := e.gridImportCostPLN - e.gridExportRevenuePLN
+	rawNetCost := e.rawGridImportCostPLN - e.rawGridExportRevenuePLN
+	var batterySavingsPLN float64
+	if e.battery != nil {
+		batterySavingsPLN = rawNetCost - netCost
+		if batterySavingsPLN < 0 {
+			batterySavingsPLN = 0
+		}
+	}
+
+	var arbNetCost, arbSavingsPLN float64
+	if e.altBattery != nil {
+		arbNetCost = e.arbGridImportCostPLN - e.arbGridExportRevenuePLN
+		arbSavingsPLN = rawNetCost - arbNetCost
+		if arbSavingsPLN < 0 {
+			arbSavingsPLN = 0
+		}
+	}
+
 	s := Summary{
 		TodayKWh:           e.todayWh / 1000,
 		MonthKWh:           e.monthWh / 1000,
@@ -609,6 +785,17 @@ func (e *Engine) broadcastSummary() {
 		SelfConsumptionKWh: selfConsumption,
 		HomeDemandKWh:      homeDemand,
 		BatterySavingsKWh:  batterySavings,
+
+		GridImportCostPLN:       e.gridImportCostPLN,
+		GridExportRevenuePLN:    e.gridExportRevenuePLN,
+		NetCostPLN:              netCost,
+		RawGridImportCostPLN:    e.rawGridImportCostPLN,
+		RawGridExportRevenuePLN: e.rawGridExportRevenuePLN,
+		RawNetCostPLN:           rawNetCost,
+		BatterySavingsPLN:       batterySavingsPLN,
+
+		ArbNetCostPLN:        arbNetCost,
+		ArbBatterySavingsPLN: arbSavingsPLN,
 	}
 	bat := e.battery
 	e.mu.Unlock()

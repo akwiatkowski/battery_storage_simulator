@@ -174,3 +174,83 @@ func TestBattery_Summary(t *testing.T) {
 	assert.InDelta(t, 50, s.SoCPercent, 0.01)
 	assert.InDelta(t, 1.0, s.Cycles, 0.01)
 }
+
+// Arbitrage strategy tests
+
+func TestBattery_ArbitrageChargesOnLowPrice(t *testing.T) {
+	b := NewBattery(defaultBatteryConfig)
+
+	// First call: baseline
+	r := b.ProcessArbitrage(1000, t0, 0.10, 0.20, 0.80)
+	assert.InDelta(t, 0, r.BatteryPowerW, 0.01)
+
+	// Price 0.10 <= lowThresh 0.20 → charge at max power
+	r = b.ProcessArbitrage(1000, t0.Add(time.Hour), 0.10, 0.20, 0.80)
+	assert.InDelta(t, -5000, r.BatteryPowerW, 0.01) // charging at max
+	// Grid adjusted: 1000 - (-5000) = 6000 (importing more to charge)
+	assert.InDelta(t, 6000, r.AdjustedGridW, 0.01)
+	// SoC: 1000 + 5000 = 6000 Wh = 60%
+	assert.InDelta(t, 60, r.SoCPercent, 0.01)
+}
+
+func TestBattery_ArbitrageDischargesOnHighPrice(t *testing.T) {
+	b := NewBattery(defaultBatteryConfig)
+	b.SoCWh = 8000 // enough headroom above floor (1000 Wh)
+
+	// First call: baseline
+	r := b.ProcessArbitrage(1000, t0, 0.90, 0.20, 0.80)
+	assert.InDelta(t, 0, r.BatteryPowerW, 0.01)
+
+	// Price 0.90 >= highThresh 0.80 → discharge at max power
+	r = b.ProcessArbitrage(1000, t0.Add(time.Hour), 0.90, 0.20, 0.80)
+	assert.InDelta(t, 5000, r.BatteryPowerW, 0.01) // discharging at max
+	// Grid adjusted: 1000 - 5000 = -4000 (now exporting)
+	assert.InDelta(t, -4000, r.AdjustedGridW, 0.01)
+}
+
+func TestBattery_ArbitrageHoldsInMiddle(t *testing.T) {
+	b := NewBattery(defaultBatteryConfig)
+	b.SoCWh = 5000
+
+	b.ProcessArbitrage(1000, t0, 0.50, 0.20, 0.80)
+	r := b.ProcessArbitrage(1000, t0.Add(time.Hour), 0.50, 0.20, 0.80)
+	// Price 0.50 between thresholds → idle
+	assert.InDelta(t, 0, r.BatteryPowerW, 0.01)
+	assert.InDelta(t, 1000, r.AdjustedGridW, 0.01)
+	assert.InDelta(t, 50, r.SoCPercent, 0.01)
+}
+
+func TestBattery_ArbitrageChargesFromGrid(t *testing.T) {
+	b := NewBattery(defaultBatteryConfig)
+
+	// Home is importing 2000W, but price is cheap → charge anyway
+	b.ProcessArbitrage(2000, t0, 0.10, 0.20, 0.80)
+	r := b.ProcessArbitrage(2000, t0.Add(time.Hour), 0.10, 0.20, 0.80)
+	assert.InDelta(t, -5000, r.BatteryPowerW, 0.01) // charging
+	// AdjustedGrid = 2000 - (-5000) = 7000 (importing even more)
+	assert.InDelta(t, 7000, r.AdjustedGridW, 0.01)
+}
+
+func TestBattery_ArbitrageRespectsFloor(t *testing.T) {
+	b := NewBattery(defaultBatteryConfig)
+	// SoC at floor (1000 Wh = 10%), high price → try to discharge
+
+	b.ProcessArbitrage(0, t0, 0.90, 0.20, 0.80)
+	r := b.ProcessArbitrage(0, t0.Add(time.Hour), 0.90, 0.20, 0.80)
+	// Can't discharge — at floor
+	assert.InDelta(t, 0, r.BatteryPowerW, 0.01)
+	assert.InDelta(t, 10, r.SoCPercent, 0.01)
+}
+
+func TestBattery_ArbitrageRespectsCeiling(t *testing.T) {
+	cfg := defaultBatteryConfig
+	cfg.ChargeToPercent = 90
+	b := NewBattery(cfg)
+	b.SoCWh = 9000 // at ceiling (90%)
+
+	b.ProcessArbitrage(0, t0, 0.10, 0.20, 0.80)
+	r := b.ProcessArbitrage(0, t0.Add(time.Hour), 0.10, 0.20, 0.80)
+	// Can't charge — at ceiling
+	assert.InDelta(t, 0, r.BatteryPowerW, 0.01)
+	assert.InDelta(t, 90, r.SoCPercent, 0.01)
+}

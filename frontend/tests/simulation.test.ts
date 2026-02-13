@@ -61,7 +61,16 @@ describe('Message payload types', () => {
 			heat_pump_prod_kwh: 600.0,
 			self_consumption_kwh: 400.0,
 			home_demand_kwh: 1634.3,
-			battery_savings_kwh: 50.0
+			battery_savings_kwh: 50.0,
+			grid_import_cost_pln: 100.0,
+			grid_export_revenue_pln: 20.0,
+			net_cost_pln: 80.0,
+			raw_grid_import_cost_pln: 120.0,
+			raw_grid_export_revenue_pln: 20.0,
+			raw_net_cost_pln: 100.0,
+			battery_savings_pln: 20.0,
+			arb_net_cost_pln: 65.0,
+			arb_battery_savings_pln: 35.0
 		};
 		expect(payload.today_kwh).toBe(12.3);
 	});

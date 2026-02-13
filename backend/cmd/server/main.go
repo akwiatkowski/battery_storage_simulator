@@ -77,6 +77,12 @@ func main() {
 	}
 	engine.SetTimeRange(tr)
 
+	// Configure price sensor for cost tracking
+	if priceID := findSensorID(dataStore, model.SensorEnergyPrice); priceID != "" {
+		engine.SetPriceSensor(priceID)
+		log.Printf("Price sensor configured: %s", priceID)
+	}
+
 	// Attempt to load NN models for prediction mode
 	loadPredictionModels(engine, dataStore)
 

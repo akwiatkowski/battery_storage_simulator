@@ -85,6 +85,17 @@ class SimulationStore {
 	homeDemandKWh = $state(0);
 	batterySavingsKWh = $state(0);
 
+	// Cost tracking (PLN)
+	gridImportCostPLN = $state(0);
+	gridExportRevenuePLN = $state(0);
+	netCostPLN = $state(0);
+	rawGridImportCostPLN = $state(0);
+	rawGridExportRevenuePLN = $state(0);
+	rawNetCostPLN = $state(0);
+	batterySavingsPLN = $state(0);
+	arbNetCostPLN = $state(0);
+	arbBatterySavingsPLN = $state(0);
+
 	// Chart data
 	chartData = $state<ChartPoint[]>([]);
 
@@ -247,6 +258,15 @@ class SimulationStore {
 				this.selfConsumptionKWh = p.self_consumption_kwh;
 				this.homeDemandKWh = p.home_demand_kwh;
 				this.batterySavingsKWh = p.battery_savings_kwh;
+				this.gridImportCostPLN = p.grid_import_cost_pln;
+				this.gridExportRevenuePLN = p.grid_export_revenue_pln;
+				this.netCostPLN = p.net_cost_pln;
+				this.rawGridImportCostPLN = p.raw_grid_import_cost_pln;
+				this.rawGridExportRevenuePLN = p.raw_grid_export_revenue_pln;
+				this.rawNetCostPLN = p.raw_net_cost_pln;
+				this.batterySavingsPLN = p.battery_savings_pln;
+				this.arbNetCostPLN = p.arb_net_cost_pln;
+				this.arbBatterySavingsPLN = p.arb_battery_savings_pln;
 				this.trackDailyData(p);
 				break;
 			}

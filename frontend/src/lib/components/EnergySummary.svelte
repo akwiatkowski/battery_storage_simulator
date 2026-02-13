@@ -51,8 +51,8 @@
 </script>
 
 <div class="summary-sections">
-	<!-- Row 1: Grid Import -->
-	<div class="section">
+	<!-- Grid Import -->
+	<div class="section grid-import">
 		<div class="section-title">Grid Import</div>
 		<div class="summary-row">
 			<div class="summary-item">
@@ -70,30 +70,30 @@
 		</div>
 	</div>
 
-	<!-- Row 2: Energy Sources (when PV data exists) -->
+	<!-- Energy Sources -->
 	{#if hasPV}
-		<div class="section">
+		<div class="section pv">
 			<div class="section-title">Energy Sources</div>
 			<div class="summary-row">
 				<div class="summary-item">
 					<span class="label">PV Production</span>
-					<span class="value pv">{formatKWh(simulation.pvProductionKWh)}</span>
+					<span class="value accent-pv">{formatKWh(simulation.pvProductionKWh)}</span>
 				</div>
 				<div class="summary-item">
 					<span class="label">Self-Consumption</span>
-					<span class="value pv">{formatKWh(simulation.selfConsumptionKWh)} <small>({selfConsumptionPct}%)</small></span>
+					<span class="value accent-pv">{formatKWh(simulation.selfConsumptionKWh)} <small>({selfConsumptionPct}%)</small></span>
 				</div>
 				<div class="summary-item">
 					<span class="label">Grid Export</span>
-					<span class="value export">{formatKWh(simulation.gridExportKWh)}</span>
+					<span class="value accent-export">{formatKWh(simulation.gridExportKWh)}</span>
 				</div>
 			</div>
 		</div>
 	{/if}
 
-	<!-- Row 3: Home (when heat pump data exists) -->
+	<!-- Home -->
 	{#if hasHeatPump}
-		<div class="section">
+		<div class="section home">
 			<div class="section-title">Home</div>
 			<div class="summary-row">
 				<div class="summary-item">
@@ -102,7 +102,7 @@
 				</div>
 				<div class="summary-item">
 					<span class="label">Heat Pump <small>(COP {cop})</small></span>
-					<span class="value heat-pump">{formatKWh(simulation.heatPumpKWh)}</span>
+					<span class="value accent-pump">{formatKWh(simulation.heatPumpKWh)}</span>
 				</div>
 				<div class="summary-item">
 					<span class="label">Appliances</span>
@@ -112,9 +112,9 @@
 		</div>
 	{/if}
 
-	<!-- Row 4: Battery Savings (when battery enabled) -->
+	<!-- Battery Savings -->
 	{#if hasBattery && simulation.batterySavingsKWh > 0}
-		<div class="section">
+		<div class="section battery">
 			<div class="section-title">Battery Savings</div>
 			<div class="summary-row">
 				<div class="summary-item">
@@ -127,17 +127,17 @@
 				</div>
 				<div class="summary-item">
 					<span class="label">Saved</span>
-					<span class="value savings">{formatKWh(simulation.batterySavingsKWh)}</span>
+					<span class="value accent-savings">{formatKWh(simulation.batterySavingsKWh)}</span>
 				</div>
 			</div>
-			<div class="summary-row" style="margin-top: 8px">
+			<div class="summary-row secondary">
 				<div class="summary-item">
 					<span class="label">Savings/kWh</span>
-					<span class="value">{savingsPerKWh.toFixed(1)} kWh</span>
+					<span class="value small">{savingsPerKWh.toFixed(1)} kWh</span>
 				</div>
 				<div class="summary-item">
 					<span class="label">Off-Grid <span class="help-icon" title="Percentage of home energy demand covered by PV self-consumption and battery, without relying on grid import. Formula: (Self-Consumption + Battery Savings) / Home Demand &times; 100">?</span></span>
-					<span class="value savings">{offGridPct.toFixed(1)}%</span>
+					<span class="value accent-savings small">{offGridPct.toFixed(1)}%</span>
 				</div>
 				<div class="summary-item"></div>
 			</div>
@@ -153,10 +153,28 @@
 	}
 
 	.section {
-		background: #f8f8f8;
-		border: 1px solid #ddd;
-		border-radius: 8px;
-		padding: 12px 16px;
+		background: #fff;
+		border: 1px solid #e5e7eb;
+		border-radius: 12px;
+		padding: 14px 20px;
+		border-left: 3px solid transparent;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+	}
+
+	.section.grid-import {
+		border-left-color: #ef4444;
+	}
+
+	.section.pv {
+		border-left-color: #eab308;
+	}
+
+	.section.home {
+		border-left-color: #3b82f6;
+	}
+
+	.section.battery {
+		border-left-color: #22c55e;
 	}
 
 	.section-title {
@@ -165,13 +183,19 @@
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: #94a3b8;
-		margin-bottom: 8px;
+		margin-bottom: 10px;
 	}
 
 	.summary-row {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 12px;
+	}
+
+	.summary-row.secondary {
+		margin-top: 10px;
+		padding-top: 10px;
+		border-top: 1px solid #f1f5f9;
 	}
 
 	.summary-item {
@@ -181,9 +205,9 @@
 	.label {
 		display: block;
 		color: #888;
-		font-size: 12px;
+		font-size: 11px;
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 		margin-bottom: 4px;
 	}
 
@@ -196,10 +220,14 @@
 
 	.value {
 		display: block;
-		font-size: 20px;
+		font-size: 24px;
 		font-weight: 600;
 		color: #222;
-		font-family: monospace;
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+	}
+
+	.value.small {
+		font-size: 18px;
 	}
 
 	.value small {
@@ -208,19 +236,19 @@
 		color: #64748b;
 	}
 
-	.value.pv {
+	.value.accent-pv {
 		color: #ca8a04;
 	}
 
-	.value.export {
+	.value.accent-export {
 		color: #22c55e;
 	}
 
-	.value.heat-pump {
+	.value.accent-pump {
 		color: #ea580c;
 	}
 
-	.value.savings {
+	.value.accent-savings {
 		color: #16a34a;
 	}
 

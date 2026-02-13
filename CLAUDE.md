@@ -45,6 +45,7 @@ docker compose up # production build
 
 - `HomeSchema.svelte` — live power flow diagram
 - `EnergySummary.svelte` — energy totals, battery savings, savings/kWh, off-grid %
+- `CostSummary.svelte` — energy costs, battery strategy comparison (self-consumption vs arbitrage)
 - `BatteryConfig.svelte` — battery parameter controls
 - `BatteryStats.svelte` — battery cycle and power distribution stats
 - `SoCHeatmap.svelte` — monthly SoC distribution heatmap
@@ -60,6 +61,20 @@ Two chained neural networks generate realistic energy data:
 Both use `[5, 32, 16, 1]` architecture (ReLU hidden, linear output), Adam optimizer, per-hour noise profiles.
 
 Temperature sequences use AR(1) correlated noise and rate-of-change constraints (max 5°C/1h, 10°C/4h, 15°C/10h, 20°C/14h).
+
+## Battery Strategies
+
+When battery is enabled, the engine runs two independent Battery instances on the same data:
+
+1. **Self-consumption** (primary): charges from excess PV, discharges to offset grid import. Affects the main simulation.
+2. **Arbitrage** (shadow): charges at max power when spot price is cheap, discharges at max power when expensive. Runs silently for cost comparison only.
+
+Price thresholds use daily P33/P67 percentiles of spot prices (cached per calendar day). The 3-way comparison appears automatically in CostSummary when battery + price data are both available.
+
+- `Battery.Process()` — self-consumption strategy (backward-looking demand)
+- `Battery.ProcessArbitrage()` — price arbitrage strategy
+- Both share a common `battery.process()` core (energy constraints, SoC, stats)
+- Engine tracks arb costs separately via `updateArbGridEnergy()`
 
 ## Conventions
 

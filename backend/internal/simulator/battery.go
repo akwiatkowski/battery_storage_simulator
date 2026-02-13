@@ -59,7 +59,7 @@ func NewBattery(cfg BatteryConfig) *Battery {
 	}
 }
 
-// Process handles one grid_power reading.
+// Process handles one grid_power reading using self-consumption strategy.
 // homeDemandW: positive = consuming from grid, negative = exporting to grid.
 //
 // Uses backward-looking intervals: the PREVIOUS reading's demand determines
@@ -67,6 +67,77 @@ func NewBattery(cfg BatteryConfig) *Battery {
 // an export reading followed by a consumption reading correctly charges the
 // battery during the export interval.
 func (b *Battery) Process(homeDemandW float64, timestamp time.Time) ProcessResult {
+	var desired float64
+	if !b.LastTime.IsZero() {
+		desired = b.selfConsumptionDecision(b.LastDemand)
+	}
+	result := b.process(desired, homeDemandW, timestamp)
+	b.LastDemand = homeDemandW
+	return result
+}
+
+// ProcessArbitrage handles one grid_power reading using price arbitrage strategy.
+// Charges at max power when price <= lowThresh, discharges at max power when
+// price >= highThresh, holds otherwise. Unlike self-consumption, this can import
+// from grid to charge.
+func (b *Battery) ProcessArbitrage(gridPowerW float64, timestamp time.Time, price, lowThresh, highThresh float64) ProcessResult {
+	var desired float64
+	if !b.LastTime.IsZero() {
+		desired = b.arbitrageDecision(price, lowThresh, highThresh)
+	}
+	return b.process(desired, gridPowerW, timestamp)
+}
+
+// selfConsumptionDecision decides battery action based on home demand.
+// Positive demand → discharge to offset import, negative → charge from excess PV.
+func (b *Battery) selfConsumptionDecision(intervalDemand float64) float64 {
+	capacityWh := b.config.CapacityKWh * 1000
+	floorWh := capacityWh * b.config.DischargeToPercent / 100
+	ceilWh := capacityWh * b.config.ChargeToPercent / 100
+
+	if intervalDemand > 0 {
+		availableWh := b.SoCWh - floorWh
+		if availableWh <= 0 {
+			return 0
+		}
+		return math.Min(intervalDemand, b.config.MaxPowerW)
+	} else if intervalDemand < 0 {
+		excessW := -intervalDemand
+		availableWh := ceilWh - b.SoCWh
+		if availableWh <= 0 {
+			return 0
+		}
+		return -math.Min(excessW, b.config.MaxPowerW)
+	}
+	return 0
+}
+
+// arbitrageDecision decides battery action based on price thresholds.
+// Charge at max when cheap, discharge at max when expensive, hold otherwise.
+func (b *Battery) arbitrageDecision(price, lowThresh, highThresh float64) float64 {
+	capacityWh := b.config.CapacityKWh * 1000
+	floorWh := capacityWh * b.config.DischargeToPercent / 100
+	ceilWh := capacityWh * b.config.ChargeToPercent / 100
+
+	if price <= lowThresh {
+		if ceilWh-b.SoCWh <= 0 {
+			return 0
+		}
+		return -b.config.MaxPowerW // charge
+	}
+	if price >= highThresh {
+		if b.SoCWh-floorWh <= 0 {
+			return 0
+		}
+		return b.config.MaxPowerW // discharge
+	}
+	return 0
+}
+
+// process applies a decided battery action for the interval ending at timestamp.
+// desiredPowerW: positive=discharge, negative=charge.
+// gridPowerW: raw grid power (for AdjustedGridW calculation).
+func (b *Battery) process(desiredPowerW, gridPowerW float64, timestamp time.Time) ProcessResult {
 	capacityWh := b.config.CapacityKWh * 1000
 	floorWh := capacityWh * b.config.DischargeToPercent / 100
 	ceilWh := capacityWh * b.config.ChargeToPercent / 100
@@ -79,11 +150,10 @@ func (b *Battery) Process(homeDemandW float64, timestamp time.Time) ProcessResul
 		}
 	}
 
-	// First reading: store demand and time baseline, no energy change yet.
+	// First reading: store time baseline, no energy change yet.
 	if b.LastTime.IsZero() {
 		b.PowerW = 0
 		b.LastTime = timestamp
-		b.LastDemand = homeDemandW
 
 		socPct := 0.0
 		if capacityWh > 0 {
@@ -91,7 +161,7 @@ func (b *Battery) Process(homeDemandW float64, timestamp time.Time) ProcessResul
 		}
 		return ProcessResult{
 			BatteryPowerW: 0,
-			AdjustedGridW: homeDemandW,
+			AdjustedGridW: gridPowerW,
 			SoCPercent:    socPct,
 		}
 	}
@@ -99,29 +169,7 @@ func (b *Battery) Process(homeDemandW float64, timestamp time.Time) ProcessResul
 	dt := timestamp.Sub(b.LastTime).Seconds()
 	hours := dt / 3600
 
-	// Use the PREVIOUS demand to determine what happened during the interval.
-	intervalDemand := b.LastDemand
-
-	var batteryPowerW float64 // positive = discharge, negative = charge
-
-	if intervalDemand > 0 {
-		// Home was consuming: discharge battery to offset
-		availableWh := b.SoCWh - floorWh
-		if availableWh <= 0 {
-			batteryPowerW = 0
-		} else {
-			batteryPowerW = math.Min(intervalDemand, b.config.MaxPowerW)
-		}
-	} else if intervalDemand < 0 {
-		// Home was exporting: charge battery to absorb
-		excessW := -intervalDemand
-		availableWh := ceilWh - b.SoCWh
-		if availableWh <= 0 {
-			batteryPowerW = 0
-		} else {
-			batteryPowerW = -math.Min(excessW, b.config.MaxPowerW)
-		}
-	}
+	batteryPowerW := desiredPowerW
 
 	// Apply energy constraints based on time delta
 	if dt > 0 {
@@ -153,9 +201,8 @@ func (b *Battery) Process(homeDemandW float64, timestamp time.Time) ProcessResul
 
 	b.PowerW = batteryPowerW
 	b.LastTime = timestamp
-	b.LastDemand = homeDemandW
 
-	adjustedGridW := homeDemandW - batteryPowerW
+	adjustedGridW := gridPowerW - batteryPowerW
 
 	socPct := 0.0
 	if capacityWh > 0 {

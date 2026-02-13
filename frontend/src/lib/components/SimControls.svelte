@@ -62,83 +62,66 @@
 </script>
 
 <div class="controls">
-	<div class="controls-row">
-		<button class="play-btn" onclick={togglePlayPause}>
-			{simulation.running ? 'Pause' : 'Play'}
-		</button>
+	<button class="play-btn" onclick={togglePlayPause}>
+		{simulation.running ? 'Pause' : 'Play'}
+	</button>
 
-		<label class="speed-control">
-			Speed:
-			<select onchange={handleSpeedChange}>
-				{#each speedOptions as opt}
-					<option value={String(opt.value)} selected={simulation.speed === opt.value}>{opt.label}</option>
-				{/each}
-			</select>
-		</label>
+	<label class="control-label">
+		Speed:
+		<select onchange={handleSpeedChange}>
+			{#each speedOptions as opt}
+				<option value={String(opt.value)} selected={simulation.speed === opt.value}>{opt.label}</option>
+			{/each}
+		</select>
+	</label>
 
-		<span class="sim-time">
-			{formatSimTime(simulation.simTime)}
-		</span>
+	<span class="sim-time">{formatSimTime(simulation.simTime)}</span>
 
-		<span class="connection-status" class:connected={simulation.connected}>
-			{simulation.connected ? 'Connected' : 'Disconnected'}
-		</span>
-	</div>
+	<label class="control-label">
+		Source:
+		<select onchange={handleSourceChange} disabled={simulation.predictionEnabled}>
+			{#each sourceOptions as opt}
+				<option value={opt.value} selected={simulation.dataSource === opt.value}>{opt.label}</option>
+			{/each}
+		</select>
+	</label>
 
-	<div class="controls-row">
-		<label class="source-control">
-			Source:
-			<select onchange={handleSourceChange} disabled={simulation.predictionEnabled}>
-				{#each sourceOptions as opt}
-					<option value={opt.value} selected={simulation.dataSource === opt.value}>{opt.label}</option>
-				{/each}
-			</select>
-		</label>
+	<label class="control-label seek">
+		Seek:
+		<input
+			type="datetime-local"
+			min={toDatetimeLocal(simulation.timeRangeStart)}
+			max={toDatetimeLocal(simulation.timeRangeEnd)}
+			onchange={handleSeek}
+			disabled={simulation.predictionEnabled}
+		/>
+	</label>
 
-		<button class="reset-btn" onclick={() => simulation.reset()} disabled={simulation.predictionEnabled}>
-			Reset
-		</button>
+	<label class="toggle-label">
+		<input
+			type="checkbox"
+			bind:checked={simulation.predictionEnabled}
+			onchange={() => simulation.setPredictionMode()}
+		/>
+		<span>NN Predict</span>
+	</label>
 
-		<label class="seek-control">
-			Seek:
-			<input
-				type="datetime-local"
-				min={toDatetimeLocal(simulation.timeRangeStart)}
-				max={toDatetimeLocal(simulation.timeRangeEnd)}
-				onchange={handleSeek}
-				disabled={simulation.predictionEnabled}
-			/>
-		</label>
-	</div>
-
-	<div class="controls-row">
-		<label class="toggle-label">
-			<input
-				type="checkbox"
-				bind:checked={simulation.predictionEnabled}
-				onchange={() => simulation.setPredictionMode()}
-			/>
-			<span>NN Prediction</span>
-		</label>
-	</div>
+	<span class="connection-badge" class:connected={simulation.connected}>
+		{simulation.connected ? 'Connected' : 'Disconnected'}
+	</span>
 </div>
 
 <style>
 	.controls {
-		background: #f8f8f8;
-		border: 1px solid #ddd;
-		border-radius: 8px;
-		padding: 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-
-	.controls-row {
+		background: #fff;
+		border: 1px solid #e5e7eb;
+		border-radius: 12px;
+		padding: 10px 16px;
 		display: flex;
 		align-items: center;
-		gap: 16px;
+		gap: 12px;
 		flex-wrap: wrap;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 	}
 
 	.play-btn {
@@ -146,106 +129,80 @@
 		color: white;
 		border: none;
 		border-radius: 6px;
-		padding: 8px 24px;
-		font-size: 14px;
+		padding: 6px 20px;
+		font-size: 13px;
 		font-weight: 600;
 		cursor: pointer;
-		min-width: 90px;
+		min-width: 72px;
 	}
 
 	.play-btn:hover {
 		background: #555;
 	}
 
-	.speed-control {
+	.control-label {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		color: #666;
-		font-size: 13px;
+		font-size: 12px;
+	}
+
+	.control-label.seek {
+		margin-left: auto;
 	}
 
 	select {
-		background: #fff;
+		background: #f8fafc;
 		color: #222;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		padding: 6px 8px;
-		font-size: 13px;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		padding: 5px 8px;
+		font-size: 12px;
 	}
 
 	.sim-time {
 		color: #333;
-		font-size: 14px;
-		font-family: monospace;
-		margin-left: auto;
+		font-size: 13px;
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 	}
 
-	.connection-status {
-		font-size: 12px;
+	.connection-badge {
+		font-size: 11px;
 		color: #c0392b;
-		padding: 4px 8px;
-		border-radius: 4px;
+		padding: 3px 8px;
+		border-radius: 10px;
 		background: #fdecea;
+		white-space: nowrap;
 	}
 
-	.connection-status.connected {
+	.connection-badge.connected {
 		color: #27ae60;
 		background: #eafaf1;
-	}
-
-	.reset-btn {
-		background: #eee;
-		color: #333;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		padding: 6px 12px;
-		font-size: 13px;
-		cursor: pointer;
-	}
-
-	.reset-btn:hover {
-		background: #ddd;
-	}
-
-	.source-control {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: #666;
-		font-size: 13px;
-	}
-
-	.seek-control {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: #666;
-		font-size: 13px;
 	}
 
 	.toggle-label {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 5px;
 		cursor: pointer;
-		font-size: 14px;
+		font-size: 12px;
 		font-weight: 600;
 		color: #334155;
 	}
 
 	.toggle-label input {
-		width: 16px;
-		height: 16px;
+		width: 14px;
+		height: 14px;
 		accent-color: #3b82f6;
 	}
 
 	input[type='datetime-local'] {
-		background: #fff;
+		background: #f8fafc;
 		color: #222;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		padding: 6px 8px;
-		font-size: 13px;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		padding: 5px 8px;
+		font-size: 12px;
 	}
 </style>

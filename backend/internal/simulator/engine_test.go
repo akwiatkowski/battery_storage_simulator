@@ -591,6 +591,50 @@ func TestEngine_GridImportExportSplit(t *testing.T) {
 	assert.InDelta(t, 0.5, summary.GridExportKWh, 0.01)
 }
 
+func TestEngine_ArbitrageSavings(t *testing.T) {
+	// Create 48 hours of grid power (constant 1000W import) + 48 hourly prices
+	// Prices: hours 0-7 cheap (0.20), hours 8-23 expensive (0.80)
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	base := time.Date(2024, 11, 21, 0, 0, 0, 0, time.UTC)
+	var gridReadings, priceReadings []model.Reading
+	for h := 0; h < 48; h++ {
+		ts := base.Add(time.Duration(h) * hour)
+		gridReadings = append(gridReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 1000, Unit: "W",
+		})
+		price := 0.80
+		if h%24 < 8 {
+			price = 0.20
+		}
+		priceReadings = append(priceReadings, model.Reading{
+			Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: price, Unit: "PLN/kWh",
+		})
+	}
+	s.AddReadings(gridReadings)
+	s.AddReadings(priceReadings)
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+	e.SetBattery(&BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 10,
+		ChargeToPercent:    100,
+	})
+
+	e.Step(48 * hour)
+
+	summary := cb.lastSummary()
+	assert.Greater(t, summary.ArbNetCostPLN, 0.0, "arb net cost should be tracked")
+	assert.Greater(t, summary.ArbBatterySavingsPLN, 0.0, "arb should produce savings")
+	assert.Less(t, summary.ArbNetCostPLN, summary.RawNetCostPLN, "arb should cost less than raw")
+}
+
 func TestEngine_BatterySavings(t *testing.T) {
 	// 3 readings at 2000W consumption, battery fully offsets
 	s := makeStore([]float64{2000, 2000, 2000})

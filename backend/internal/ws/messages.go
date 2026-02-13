@@ -53,6 +53,17 @@ type SummaryPayload struct {
 	SelfConsumptionKWh float64 `json:"self_consumption_kwh"`
 	HomeDemandKWh      float64 `json:"home_demand_kwh"`
 	BatterySavingsKWh  float64 `json:"battery_savings_kwh"`
+
+	GridImportCostPLN       float64 `json:"grid_import_cost_pln"`
+	GridExportRevenuePLN    float64 `json:"grid_export_revenue_pln"`
+	NetCostPLN              float64 `json:"net_cost_pln"`
+	RawGridImportCostPLN    float64 `json:"raw_grid_import_cost_pln"`
+	RawGridExportRevenuePLN float64 `json:"raw_grid_export_revenue_pln"`
+	RawNetCostPLN           float64 `json:"raw_net_cost_pln"`
+	BatterySavingsPLN       float64 `json:"battery_savings_pln"`
+
+	ArbNetCostPLN        float64 `json:"arb_net_cost_pln"`
+	ArbBatterySavingsPLN float64 `json:"arb_battery_savings_pln"`
 }
 
 type SensorInfo struct {
@@ -154,5 +165,16 @@ func SummaryFromEngine(s simulator.Summary) SummaryPayload {
 		SelfConsumptionKWh: s.SelfConsumptionKWh,
 		HomeDemandKWh:      s.HomeDemandKWh,
 		BatterySavingsKWh:  s.BatterySavingsKWh,
+
+		GridImportCostPLN:       s.GridImportCostPLN,
+		GridExportRevenuePLN:    s.GridExportRevenuePLN,
+		NetCostPLN:              s.NetCostPLN,
+		RawGridImportCostPLN:    s.RawGridImportCostPLN,
+		RawGridExportRevenuePLN: s.RawGridExportRevenuePLN,
+		RawNetCostPLN:           s.RawNetCostPLN,
+		BatterySavingsPLN:       s.BatterySavingsPLN,
+
+		ArbNetCostPLN:        s.ArbNetCostPLN,
+		ArbBatterySavingsPLN: s.ArbBatterySavingsPLN,
 	}
 }
