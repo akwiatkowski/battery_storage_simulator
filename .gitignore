@@ -18,7 +18,7 @@ frontend/build/
 .DS_Store
 
 # Input data (privacy)
-input/*.csv
+input/
 
 # Docker
 docker-compose.override.yml
