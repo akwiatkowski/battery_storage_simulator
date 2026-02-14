@@ -151,21 +151,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Energy Simulation Report</title>
 <style>
-	body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; background: #f8fafc; }
+	body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; color: #1e293b; background: #f7f9fc; }
 	h1 { font-size: 22px; margin-bottom: 4px; }
-	h2 { font-size: 16px; margin-top: 32px; margin-bottom: 8px; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+	h2 { font-size: 16px; margin-top: 32px; margin-bottom: 8px; color: #334155; border-bottom: 2px solid #e8ecf1; padding-bottom: 4px; }
 	.meta { font-size: 13px; color: #64748b; margin-bottom: 24px; }
 	table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
-	th { text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px; border-bottom: 2px solid #e2e8f0; background: #f1f5f9; }
-	td { padding: 5px 10px; border-bottom: 1px solid #e2e8f0; }
+	th { text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px; border-bottom: 2px solid #e8ecf1; background: #eef2f6; }
+	td { padding: 5px 10px; border-bottom: 1px solid #e8ecf1; }
 	th.r, td.r { text-align: right; }
 	.mono { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; }
-	.pos { color: #16a34a; }
-	.neg { color: #dc2626; }
-	tbody tr:nth-child(even) { background: #f8fafc; }
+	.pos { color: #5bb88a; }
+	.neg { color: #e87c6c; }
+	tbody tr:nth-child(even) { background: #f8fafb; }
 	tbody tr:nth-child(odd) { background: #fff; }
-	tr.subtotal { background: #f1f5f9 !important; font-weight: 600; }
-	tfoot td { font-weight: 700; border-top: 2px solid #cbd5e1; border-bottom: none; background: #f1f5f9; }
+	tr.subtotal { background: #eef2f6 !important; font-weight: 600; }
+	tfoot td { font-weight: 700; border-top: 2px solid #d0d8e0; border-bottom: none; background: #eef2f6; }
 </style>
 </head>
 <body>

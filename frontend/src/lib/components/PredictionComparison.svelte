@@ -67,11 +67,11 @@
 <style>
 	.comparison-panel {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px 20px;
-		border-left: 3px solid #8b5cf6;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+		border-left: 3px solid #9b8fd8;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 	}
 
 	.section-title {
@@ -124,11 +124,11 @@
 	}
 
 	.comp-value.predicted {
-		color: #8b5cf6;
+		color: #9b8fd8;
 	}
 
 	.comp-value.mae {
-		color: #f59e0b;
+		color: #f0a050;
 	}
 
 	.sample-count {

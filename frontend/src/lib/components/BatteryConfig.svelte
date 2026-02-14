@@ -100,9 +100,9 @@
 
 <style>
 	.battery-config {
-		background: #fafbfc;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		background: #f8fafb;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px;
 	}
 
@@ -123,7 +123,7 @@
 	.toggle-label input {
 		width: 18px;
 		height: 18px;
-		accent-color: #3b82f6;
+		accent-color: #64b5f6;
 	}
 
 	.config-fields {
@@ -165,8 +165,8 @@
 
 	.field-input input:focus {
 		outline: none;
-		border-color: #3b82f6;
-		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+		border-color: #64b5f6;
+		box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.15);
 	}
 
 	.field-unit {

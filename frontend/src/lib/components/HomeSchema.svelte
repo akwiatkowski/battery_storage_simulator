@@ -38,13 +38,13 @@
 	let appliancePower = $derived(Math.max(0, homeDemand - heatPumpPower));
 
 	// Grid wire color
-	let gridColor = $derived(gridConsuming ? '#ef4444' : '#22c55e');
-	// Battery wire color: orange for discharge, blue for charge
-	let batteryColor = $derived(batteryDischarging ? '#f59e0b' : '#3b82f6');
+	let gridColor = $derived(gridConsuming ? '#e87c6c' : '#5bb88a');
+	// Battery wire color: amber for discharge, blue for charge
+	let batteryColor = $derived(batteryDischarging ? '#f0a050' : '#64b5f6');
 
 	// Battery fill color based on SoC
 	let batteryFill = $derived(
-		batterySoC > 60 ? '#22c55e' : batterySoC > 20 ? '#f59e0b' : '#ef4444'
+		batterySoC > 60 ? '#5bb88a' : batterySoC > 20 ? '#f0a050' : '#e87c6c'
 	);
 
 	// Battery fill height for SVG
@@ -55,7 +55,7 @@
 	let batteryHighPower = $derived(Math.abs(batteryPower) > 1000);
 
 	// PV color
-	const pvColor = '#eab308';
+	const pvColor = '#e8b830';
 </script>
 
 <div class="schema-card">
@@ -90,11 +90,11 @@
 			<!-- PV Solar panel icon at top center (above wire junction) -->
 			<g transform="translate(400, 10)">
 				<!-- Panel body -->
-				<rect x="-30" y="0" width="60" height="40" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-width="2" />
+				<rect x="-30" y="0" width="60" height="40" rx="4" fill="#fef9c3" stroke="#c8a020" stroke-width="2" />
 				<!-- Panel grid lines -->
-				<line x1="-30" y1="20" x2="30" y2="20" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
-				<line x1="-10" y1="0" x2="-10" y2="40" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
-				<line x1="10" y1="0" x2="10" y2="40" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
+				<line x1="-30" y1="20" x2="30" y2="20" stroke="#c8a020" stroke-width="1" opacity="0.5" />
+				<line x1="-10" y1="0" x2="-10" y2="40" stroke="#c8a020" stroke-width="1" opacity="0.5" />
+				<line x1="10" y1="0" x2="10" y2="40" stroke="#c8a020" stroke-width="1" opacity="0.5" />
 				<!-- Sun rays -->
 				<circle cx="0" cy="-14" r="8" fill="#fbbf24" opacity="0.7" />
 				<line x1="-16" y1="-14" x2="-12" y2="-14" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" />
@@ -117,7 +117,7 @@
 			{#if pvProducing}
 				<g transform="translate(450, 95)">
 					<rect x="-40" y="-14" width="80" height="32" rx="8"
-						fill="white" stroke="#fcd34d" stroke-width="1.5" />
+						fill="white" stroke="#f0d060" stroke-width="1.5" />
 					<text x="0" y="6" text-anchor="middle" class="power-value pv-power">
 						{formatPower(pvPower)}
 					</text>
@@ -207,7 +207,7 @@
 			<!-- Grid power badge -->
 			<g transform="translate(235, 176)">
 				<rect x="-50" y="-16" width="100" height="40" rx="8"
-					fill="white" stroke={gridConsuming ? '#fca5a5' : '#86efac'} stroke-width="1.5" />
+					fill="white" stroke={gridConsuming ? '#f0b8b0' : '#a0d8b8'} stroke-width="1.5" />
 				<text x="0" y="-1" text-anchor="middle" class="power-label">
 					{gridConsuming ? 'Import' : 'Export'}
 				</text>
@@ -286,7 +286,7 @@
 			<!-- Battery power badge -->
 			<g transform="translate(560, 176)">
 				<rect x="-50" y="-16" width="100" height="40" rx="8"
-					fill="white" stroke={batteryDischarging ? '#fcd34d' : '#93c5fd'} stroke-width="1.5" />
+					fill="white" stroke={batteryDischarging ? '#f0d060' : '#a8d4f8'} stroke-width="1.5" />
 				<text x="0" y="-1" text-anchor="middle" class="power-label">
 					{batteryDischarging ? 'Discharge' : 'Charge'}
 				</text>
@@ -327,9 +327,9 @@
 		<svg viewBox="0 0 700 310" xmlns="http://www.w3.org/2000/svg">
 			<defs>
 				<linearGradient id="wireGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-					<stop offset="0%" stop-color={gridConsuming ? '#ef4444' : '#22c55e'} stop-opacity="0.15" />
-					<stop offset="50%" stop-color={gridConsuming ? '#ef4444' : '#22c55e'} stop-opacity="0.4" />
-					<stop offset="100%" stop-color={gridConsuming ? '#ef4444' : '#22c55e'} stop-opacity="0.15" />
+					<stop offset="0%" stop-color={gridConsuming ? '#e87c6c' : '#5bb88a'} stop-opacity="0.15" />
+					<stop offset="50%" stop-color={gridConsuming ? '#e87c6c' : '#5bb88a'} stop-opacity="0.4" />
+					<stop offset="100%" stop-color={gridConsuming ? '#e87c6c' : '#5bb88a'} stop-opacity="0.15" />
 				</linearGradient>
 				<linearGradient id="wireGradPV2" x1="0%" y1="0%" x2="0%" y2="100%">
 					<stop offset="0%" stop-color={pvColor} stop-opacity="0.15" />
@@ -347,10 +347,10 @@
 
 			<!-- PV Solar panel at top center -->
 			<g transform="translate(350, 10)">
-				<rect x="-30" y="0" width="60" height="40" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-width="2" />
-				<line x1="-30" y1="20" x2="30" y2="20" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
-				<line x1="-10" y1="0" x2="-10" y2="40" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
-				<line x1="10" y1="0" x2="10" y2="40" stroke="#ca8a04" stroke-width="1" opacity="0.5" />
+				<rect x="-30" y="0" width="60" height="40" rx="4" fill="#fef9c3" stroke="#c8a020" stroke-width="2" />
+				<line x1="-30" y1="20" x2="30" y2="20" stroke="#c8a020" stroke-width="1" opacity="0.5" />
+				<line x1="-10" y1="0" x2="-10" y2="40" stroke="#c8a020" stroke-width="1" opacity="0.5" />
+				<line x1="10" y1="0" x2="10" y2="40" stroke="#c8a020" stroke-width="1" opacity="0.5" />
 				<circle cx="0" cy="-14" r="8" fill="#fbbf24" opacity="0.7" />
 				<line x1="-16" y1="-14" x2="-12" y2="-14" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" />
 				<line x1="12" y1="-14" x2="16" y2="-14" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" />
@@ -372,7 +372,7 @@
 			{#if pvProducing}
 				<g transform="translate(400, 120)">
 					<rect x="-40" y="-14" width="80" height="32" rx="8"
-						fill="white" stroke="#fcd34d" stroke-width="1.5" />
+						fill="white" stroke="#f0d060" stroke-width="1.5" />
 					<text x="0" y="6" text-anchor="middle" class="power-value pv-power">
 						{formatPower(pvPower)}
 					</text>
@@ -433,23 +433,23 @@
 			<!-- Power flow dots -->
 			{#if hasPower}
 				{#if gridConsuming}
-					<circle r="5" fill="#ef4444" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#e87c6c" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" path="M130,198 L480,198" />
 					</circle>
-					<circle r="5" fill="#ef4444" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#e87c6c" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" begin="0.66s" path="M130,198 L480,198" />
 					</circle>
-					<circle r="5" fill="#ef4444" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#e87c6c" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" begin="1.33s" path="M130,198 L480,198" />
 					</circle>
 				{:else}
-					<circle r="5" fill="#22c55e" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#5bb88a" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" path="M480,198 L130,198" />
 					</circle>
-					<circle r="5" fill="#22c55e" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#5bb88a" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" begin="0.66s" path="M480,198 L130,198" />
 					</circle>
-					<circle r="5" fill="#22c55e" filter="url(#glow2)" class="flow-dot">
+					<circle r="5" fill="#5bb88a" filter="url(#glow2)" class="flow-dot">
 						<animateMotion dur="2s" repeatCount="indefinite" begin="1.33s" path="M480,198 L130,198" />
 					</circle>
 				{/if}
@@ -466,7 +466,7 @@
 			<!-- Power reading badge -->
 			<g transform="translate(305, 150)">
 				<rect x="-60" y="-20" width="120" height="52" rx="10"
-					fill="white" stroke={gridConsuming ? '#fca5a5' : '#86efac'} stroke-width="1.5" />
+					fill="white" stroke={gridConsuming ? '#f0b8b0' : '#a0d8b8'} stroke-width="1.5" />
 				<text x="0" y="-2" text-anchor="middle" class="power-label">
 					{gridConsuming ? 'Consuming' : 'Exporting'}
 				</text>
@@ -504,9 +504,9 @@
 		width: 100%;
 		max-width: 900px;
 		margin: 0 auto;
-		background: #fafbfc;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		background: #f8fafb;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 20px 16px 12px;
 	}
 
@@ -535,24 +535,24 @@
 		font-size: 18px;
 		font-weight: 700;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-		fill: #ef4444;
+		fill: #e87c6c;
 	}
 
 	.power-value.exporting {
-		fill: #22c55e;
+		fill: #5bb88a;
 	}
 
 	.power-value.battery-power {
-		fill: #f59e0b;
+		fill: #f0a050;
 	}
 
 	.power-value.battery-power.charging {
-		fill: #3b82f6;
+		fill: #64b5f6;
 	}
 
 	.power-value.pv-power {
 		font-size: 15px;
-		fill: #ca8a04;
+		fill: #c8a020;
 	}
 
 	.battery-soc-label {
@@ -577,7 +577,7 @@
 	}
 
 	.demand-sublabel.demand-export {
-		fill: #22c55e;
+		fill: #5bb88a;
 	}
 
 	.demand-sublabel.heat-pump-sublabel {

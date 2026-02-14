@@ -94,9 +94,9 @@
 
 <style>
 	.battery-stats {
-		background: #fafbfc;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		background: #f8fafb;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px;
 		display: flex;
 		flex-direction: column;
@@ -125,7 +125,7 @@
 	}
 
 	.stat-value.degraded {
-		color: #d97706;
+		color: #e0a040;
 	}
 
 	.histogram {
@@ -161,7 +161,7 @@
 	.bar-track {
 		flex: 1;
 		height: 14px;
-		background: #f1f5f9;
+		background: #eef2f6;
 		border-radius: 4px;
 		overflow: hidden;
 	}
@@ -175,15 +175,15 @@
 	}
 
 	.bar-fill.bar-charge {
-		background: #3b82f6;
+		background: #64b5f6;
 	}
 
 	.bar-fill.bar-discharge {
-		background: #f59e0b;
+		background: #f0a050;
 	}
 
 	.bar-fill.bar-soc {
-		background: #22c55e;
+		background: #5bb88a;
 	}
 
 	.bar-value {

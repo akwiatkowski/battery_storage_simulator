@@ -79,7 +79,8 @@ describe('Message payload types', () => {
 			nm_net_cost_pln: 55.0,
 			nm_credit_bank_kwh: 12.5,
 			nb_net_cost_pln: 60.0,
-			nb_deposit_pln: 8.3
+			nb_deposit_pln: 8.3,
+			heat_pump_cost_pln: 130.0
 		};
 		expect(payload.today_kwh).toBe(12.3);
 	});

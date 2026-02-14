@@ -4,13 +4,13 @@
 	const dayLabels = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 	const MAX_AUTONOMY = 48; // clip color at 48h
 
-	// Red (0h) → Blue (48h) via hue interpolation: hue 0 (red) → 240 (blue)
+	// Warm amber (0h) → Cool blue (48h) via hue interpolation
 	function cellColor(hours: number): string {
-		if (hours <= 0) return '#ebedf0';
+		if (hours <= 0) return '#eef2f6';
 		const clamped = Math.min(hours, MAX_AUTONOMY);
 		const ratio = clamped / MAX_AUTONOMY; // 0..1
-		const hue = ratio * 240; // 0=red, 120=green, 240=blue
-		return `hsl(${hue}, 70%, 50%)`;
+		const hue = 30 + ratio * 180; // 30=warm amber, 210=blue
+		return `hsl(${hue}, 65%, 55%)`;
 	}
 
 	function formatDate(dateStr: string): string {
@@ -114,12 +114,12 @@
 			<!-- Legend -->
 			<div class="legend">
 				<span class="legend-label">0h</span>
-				<div class="legend-cell" style="background: #ebedf0" title="0 hours"></div>
-				<div class="legend-cell" style="background: hsl(0, 70%, 50%)" title="~0h"></div>
-				<div class="legend-cell" style="background: hsl(60, 70%, 50%)" title="~12h"></div>
-				<div class="legend-cell" style="background: hsl(120, 70%, 50%)" title="~24h"></div>
-				<div class="legend-cell" style="background: hsl(180, 70%, 50%)" title="~36h"></div>
-				<div class="legend-cell" style="background: hsl(240, 70%, 50%)" title="48h"></div>
+				<div class="legend-cell" style="background: #eef2f6" title="0 hours"></div>
+				<div class="legend-cell" style="background: hsl(30, 65%, 55%)" title="~0h"></div>
+				<div class="legend-cell" style="background: hsl(75, 65%, 55%)" title="~12h"></div>
+				<div class="legend-cell" style="background: hsl(120, 65%, 55%)" title="~24h"></div>
+				<div class="legend-cell" style="background: hsl(165, 65%, 55%)" title="~36h"></div>
+				<div class="legend-cell" style="background: hsl(210, 65%, 55%)" title="48h"></div>
 				<span class="legend-label">48h</span>
 			</div>
 		</div>
@@ -128,9 +128,9 @@
 
 <style>
 	.heatmap-card {
-		background: #fafbfc;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		background: #f8fafb;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px;
 	}
 

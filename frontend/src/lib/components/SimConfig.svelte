@@ -135,10 +135,10 @@
 <style>
 	.config-panel {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 14px 20px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 	}
 
 	.section-title {

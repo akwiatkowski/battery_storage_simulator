@@ -253,10 +253,10 @@
 <style>
 	.cost-sections {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px 20px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 	}
 
 	.section-title {
@@ -278,20 +278,20 @@
 		text-align: center;
 		padding: 12px 8px;
 		border-radius: 8px;
-		background: #f8fafc;
+		background: #f8fafb;
 		border-left: 3px solid transparent;
 	}
 
 	.cost-card.import {
-		border-left-color: #ef4444;
+		border-left-color: #e87c6c;
 	}
 
 	.cost-card.export {
-		border-left-color: #22c55e;
+		border-left-color: #5bb88a;
 	}
 
 	.cost-card.net {
-		border-left-color: #3b82f6;
+		border-left-color: #64b5f6;
 	}
 
 	.cost-label {
@@ -314,7 +314,7 @@
 	.battery-comparison {
 		margin-top: 16px;
 		padding-top: 12px;
-		border-top: 1px solid #f1f5f9;
+		border-top: 1px solid #eef2f6;
 	}
 
 	.comparison-title {
@@ -362,17 +362,17 @@
 	}
 
 	.comp-value.saved {
-		color: #16a34a;
+		color: #5bb88a;
 	}
 
 	.comp-value.warning {
-		color: #d97706;
+		color: #e0a040;
 	}
 
 	.comp-saved {
 		display: block;
 		font-size: 11px;
-		color: #16a34a;
+		color: #5bb88a;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		margin-top: 2px;
 	}

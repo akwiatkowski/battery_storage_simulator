@@ -27,12 +27,12 @@
 	}
 
 	function cellColor(hours: number): string {
-		if (hours === 0) return '#f1f5f9';
+		if (hours === 0) return '#eef2f6';
 		const intensity = Math.min(1, hours / maxHours);
-		// Green gradient: light to dark
-		const r = Math.round(220 - intensity * 186);
-		const g = Math.round(240 - intensity * 43);
-		const b = Math.round(220 - intensity * 186);
+		// Teal gradient: light blue → teal
+		const r = Math.round(220 - intensity * 129);
+		const g = Math.round(238 - intensity * 54);
+		const b = Math.round(245 - intensity * 107);
 		return `rgb(${r}, ${g}, ${b})`;
 	}
 
@@ -73,9 +73,9 @@
 
 <style>
 	.heatmap-card {
-		background: #fafbfc;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		background: #f8fafb;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 16px;
 	}
 

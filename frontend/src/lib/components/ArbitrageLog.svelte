@@ -157,8 +157,8 @@
 <style>
 	.arb-log {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		overflow: hidden;
 	}
 
@@ -200,7 +200,7 @@
 		font-size: 12px;
 		font-weight: 500;
 		color: #64748b;
-		background: #f1f5f9;
+		background: #eef2f6;
 		padding: 2px 8px;
 		border-radius: 10px;
 	}
@@ -264,7 +264,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		padding: 6px 8px;
-		border-bottom: 2px solid #e5e7eb;
+		border-bottom: 2px solid #e8ecf1;
 	}
 
 	th.num {
@@ -273,7 +273,7 @@
 
 	td {
 		padding: 5px 8px;
-		border-bottom: 1px solid #f1f5f9;
+		border-bottom: 1px solid #eef2f6;
 		color: #334155;
 	}
 
@@ -287,16 +287,16 @@
 	}
 
 	.positive {
-		color: #16a34a;
+		color: #5bb88a;
 	}
 
 	.negative {
-		color: #dc2626;
+		color: #e87c6c;
 	}
 
 	tfoot td {
 		font-weight: 700;
-		border-top: 2px solid #e5e7eb;
+		border-top: 2px solid #e8ecf1;
 		border-bottom: none;
 		padding-top: 8px;
 	}

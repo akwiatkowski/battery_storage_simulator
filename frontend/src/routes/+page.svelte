@@ -96,7 +96,7 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #f8fafc;
+		background: #f7f9fc;
 		color: #222;
 		font-family:
 			-apple-system,

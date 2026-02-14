@@ -174,27 +174,27 @@
 
 	.section {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 14px 20px;
 		border-left: 3px solid transparent;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 	}
 
 	.section.grid-import {
-		border-left-color: #ef4444;
+		border-left-color: #e87c6c;
 	}
 
 	.section.pv {
-		border-left-color: #eab308;
+		border-left-color: #e8b830;
 	}
 
 	.section.home {
-		border-left-color: #3b82f6;
+		border-left-color: #64b5f6;
 	}
 
 	.section.battery {
-		border-left-color: #22c55e;
+		border-left-color: #5bb88a;
 	}
 
 	.section-title {
@@ -215,7 +215,7 @@
 	.summary-row.secondary {
 		margin-top: 10px;
 		padding-top: 10px;
-		border-top: 1px solid #f1f5f9;
+		border-top: 1px solid #eef2f6;
 	}
 
 	.summary-item {
@@ -257,19 +257,19 @@
 	}
 
 	.value.accent-pv {
-		color: #ca8a04;
+		color: #c8a020;
 	}
 
 	.value.accent-export {
-		color: #22c55e;
+		color: #5bb88a;
 	}
 
 	.value.accent-pump {
-		color: #ea580c;
+		color: #e8884c;
 	}
 
 	.value.accent-savings {
-		color: #16a34a;
+		color: #5bb88a;
 	}
 
 	.value.muted {

@@ -126,14 +126,14 @@
 <style>
 	.controls {
 		background: #fff;
-		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border: 1px solid #e8ecf1;
+		border-radius: 14px;
 		padding: 10px 16px;
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		flex-wrap: wrap;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 	}
 
 	.play-btn {
@@ -181,36 +181,36 @@
 
 	.price-badge {
 		font-size: 11px;
-		color: #16a34a;
+		color: #5bb88a;
 		padding: 3px 8px;
 		border-radius: 10px;
-		background: #eafaf1;
+		background: #edf8f2;
 		white-space: nowrap;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 	}
 
 	.price-badge.cheap {
-		color: #d97706;
-		background: #fef3c7;
+		color: #e0a040;
+		background: #fef6d8;
 	}
 
 	.price-badge.negative {
-		color: #dc2626;
-		background: #fef2f2;
+		color: #e87c6c;
+		background: #fdf0ee;
 	}
 
 	.connection-badge {
 		font-size: 11px;
-		color: #c0392b;
+		color: #e87c6c;
 		padding: 3px 8px;
 		border-radius: 10px;
-		background: #fdecea;
+		background: #fdf0ee;
 		white-space: nowrap;
 	}
 
 	.connection-badge.connected {
-		color: #27ae60;
-		background: #eafaf1;
+		color: #5bb88a;
+		background: #edf8f2;
 	}
 
 	.toggle-label {
@@ -226,7 +226,7 @@
 	.toggle-label input {
 		width: 14px;
 		height: 14px;
-		accent-color: #3b82f6;
+		accent-color: #64b5f6;
 	}
 
 	input[type='datetime-local'] {
