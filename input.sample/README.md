@@ -1,6 +1,6 @@
 # Sample Input Data
 
-Example CSV files demonstrating all supported data formats. These use fictional sensor entity IDs and won't match a real Home Assistant installation.
+Example CSV files demonstrating all supported data formats with realistic sample data.
 
 ## Usage
 
@@ -33,6 +33,6 @@ One file per sensor, loaded from the root `input/` directory:
 
 ## Notes
 
-- The entity IDs in these samples (e.g. `sensor.example_grid_power`) are fictional. For real data, use your actual Home Assistant entity IDs.
-- Stats and recent formats require entity IDs that match the `HAEntityToSensorType` mapping in the backend. Unknown entity IDs are silently skipped.
+- The sample data values are fictional but the entity IDs match the backend's `HAEntityToSensorType` mapping, so these files will load correctly.
+- Stats and recent formats require entity IDs present in the mapping. Unknown entity IDs are silently skipped.
 - See `input/README.md` for full format documentation.

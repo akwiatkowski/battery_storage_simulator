@@ -1,6 +1,11 @@
 # Go
 /bin/
+/tmp/
 backend/main
+backend/server
+backend/fetch-prices
+backend/sql-stats
+backend/train-predictor
 backend/vendor/
 
 # Frontend
