@@ -26,6 +26,13 @@
 			: '0.0'
 	);
 
+	let hasHeatPumpCost = $derived(simulation.heatPumpCostPLN > 0);
+	let heatPumpAvgPrice = $derived(
+		simulation.heatPumpKWh > 0
+			? simulation.heatPumpCostPLN / simulation.heatPumpKWh
+			: 0
+	);
+
 	// Appliance consumption = demand - heat pump
 	let applianceKWh = $derived(
 		Math.max(0, simulation.homeDemandKWh - simulation.heatPumpKWh)
@@ -109,6 +116,19 @@
 					<span class="value">{formatKWh(applianceKWh)}</span>
 				</div>
 			</div>
+			{#if hasHeatPumpCost}
+				<div class="summary-row secondary">
+					<div class="summary-item">
+						<span class="label">HP Cost</span>
+						<span class="value small accent-pump">{simulation.heatPumpCostPLN.toFixed(2)} PLN</span>
+					</div>
+					<div class="summary-item">
+						<span class="label">Avg HP Price</span>
+						<span class="value small">{heatPumpAvgPrice.toFixed(2)} PLN/kWh</span>
+					</div>
+					<div class="summary-item"></div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 

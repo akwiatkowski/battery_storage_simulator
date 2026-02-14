@@ -27,6 +27,7 @@ type Summary struct {
 	PVProductionKWh    float64 `json:"pv_production_kwh"`
 	HeatPumpKWh        float64 `json:"heat_pump_kwh"`
 	HeatPumpProdKWh    float64 `json:"heat_pump_prod_kwh"`
+	HeatPumpCostPLN    float64 `json:"heat_pump_cost_pln"`
 	SelfConsumptionKWh float64 `json:"self_consumption_kwh"`
 	HomeDemandKWh      float64 `json:"home_demand_kwh"`
 	BatterySavingsKWh  float64 `json:"battery_savings_kwh"`
@@ -181,6 +182,7 @@ type Engine struct {
 
 	// Per-source energy tracking (Wh)
 	pvWh, heatPumpWh, heatPumpProdWh float64
+	heatPumpCostPLN                  float64
 	gridImportWh, gridExportWh       float64
 	rawGridImportWh, rawGridExportWh float64 // before battery adjustment
 
@@ -451,6 +453,7 @@ func (e *Engine) resetAccumulators() {
 	e.pvWh = 0
 	e.heatPumpWh = 0
 	e.heatPumpProdWh = 0
+	e.heatPumpCostPLN = 0
 	e.gridImportWh = 0
 	e.gridExportWh = 0
 	e.rawGridImportWh = 0
@@ -821,6 +824,8 @@ func (e *Engine) updateEnergy(r model.Reading) {
 	case model.SensorPumpConsumption:
 		if wh > 0 {
 			e.heatPumpWh += wh
+			price := e.spotPrice(r.Timestamp)
+			e.heatPumpCostPLN += (wh / 1000) * price
 		}
 	case model.SensorPumpProduction:
 		if wh > 0 {
@@ -1236,6 +1241,7 @@ func (e *Engine) broadcastSummary() {
 		PVProductionKWh:    pvKWh,
 		HeatPumpKWh:        e.heatPumpWh / 1000,
 		HeatPumpProdKWh:    e.heatPumpProdWh / 1000,
+		HeatPumpCostPLN:    e.heatPumpCostPLN,
 		SelfConsumptionKWh: selfConsumption,
 		HomeDemandKWh:      homeDemand,
 		BatterySavingsKWh:  batterySavings,

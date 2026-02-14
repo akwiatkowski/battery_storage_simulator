@@ -87,6 +87,7 @@ class SimulationStore {
 	pvProductionKWh = $state(0);
 	heatPumpKWh = $state(0);
 	heatPumpProdKWh = $state(0);
+	heatPumpCostPLN = $state(0);
 	selfConsumptionKWh = $state(0);
 	homeDemandKWh = $state(0);
 	batterySavingsKWh = $state(0);
@@ -316,6 +317,7 @@ class SimulationStore {
 				this.pvProductionKWh = p.pv_production_kwh;
 				this.heatPumpKWh = p.heat_pump_kwh;
 				this.heatPumpProdKWh = p.heat_pump_prod_kwh;
+				this.heatPumpCostPLN = p.heat_pump_cost_pln;
 				this.selfConsumptionKWh = p.self_consumption_kwh;
 				this.homeDemandKWh = p.home_demand_kwh;
 				this.batterySavingsKWh = p.battery_savings_kwh;

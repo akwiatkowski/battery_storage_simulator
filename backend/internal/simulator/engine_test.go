@@ -1085,3 +1085,71 @@ func TestEngine_BatteryFullSimulation(t *testing.T) {
 	summary := cb.lastSummary()
 	t.Logf("Energy: total=%.3f kWh, Battery: SoC=%.1f%% Cycles=%.3f", summary.TotalKWh, bs.SoCPercent, bs.Cycles)
 }
+
+func TestEngine_HeatPumpCostTracking(t *testing.T) {
+	// Grid 500W + heat pump 300W, with price at 0.50 PLN/kWh
+	// 2 readings each, 1h apart → 1 interval
+	// HP cost: 300W * 1h = 300 Wh = 0.3 kWh * 0.50 = 0.15 PLN
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump", Name: "Heat Pump", Type: model.SensorPumpConsumption, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+	})
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+	})
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+	})
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(2 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 0.3, summary.HeatPumpKWh, 0.01)
+	assert.InDelta(t, 0.15, summary.HeatPumpCostPLN, 0.01)
+}
+
+func TestEngine_HeatPumpCostResetOnSeek(t *testing.T) {
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump", Name: "Heat Pump", Type: model.SensorPumpConsumption, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+		{Timestamp: startTime.Add(2 * hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+	})
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+		{Timestamp: startTime.Add(2 * hour), SensorID: "sensor.pump", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+	})
+	s.AddReadings([]model.Reading{
+		{Timestamp: startTime, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		{Timestamp: startTime.Add(hour), SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		{Timestamp: startTime.Add(2 * hour), SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+	})
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(2 * hour)
+	assert.Greater(t, cb.lastSummary().HeatPumpCostPLN, 0.0)
+
+	e.Seek(startTime)
+	assert.InDelta(t, 0.0, cb.lastSummary().HeatPumpCostPLN, 0.001)
+}

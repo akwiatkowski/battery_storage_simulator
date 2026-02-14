@@ -50,6 +50,7 @@ type SummaryPayload struct {
 	PVProductionKWh    float64 `json:"pv_production_kwh"`
 	HeatPumpKWh        float64 `json:"heat_pump_kwh"`
 	HeatPumpProdKWh    float64 `json:"heat_pump_prod_kwh"`
+	HeatPumpCostPLN    float64 `json:"heat_pump_cost_pln"`
 	SelfConsumptionKWh float64 `json:"self_consumption_kwh"`
 	HomeDemandKWh      float64 `json:"home_demand_kwh"`
 	BatterySavingsKWh  float64 `json:"battery_savings_kwh"`
@@ -230,6 +231,7 @@ func SummaryFromEngine(s simulator.Summary) SummaryPayload {
 		PVProductionKWh:    s.PVProductionKWh,
 		HeatPumpKWh:        s.HeatPumpKWh,
 		HeatPumpProdKWh:    s.HeatPumpProdKWh,
+		HeatPumpCostPLN:    s.HeatPumpCostPLN,
 		SelfConsumptionKWh: s.SelfConsumptionKWh,
 		HomeDemandKWh:      s.HomeDemandKWh,
 		BatterySavingsKWh:  s.BatterySavingsKWh,

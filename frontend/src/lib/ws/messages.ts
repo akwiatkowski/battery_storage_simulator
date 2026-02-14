@@ -59,6 +59,7 @@ export interface SummaryPayload {
 	pv_production_kwh: number;
 	heat_pump_kwh: number;
 	heat_pump_prod_kwh: number;
+	heat_pump_cost_pln: number;
 	self_consumption_kwh: number;
 	home_demand_kwh: number;
 	battery_savings_kwh: number;
