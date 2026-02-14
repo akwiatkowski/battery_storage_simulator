@@ -305,6 +305,84 @@ describe('handleMessage: battery:summary', () => {
 	});
 });
 
+describe('getHoursFromMidnight', () => {
+	it('returns 0 for midnight', () => {
+		handleMessage({
+			type: MSG_SIM_STATE,
+			payload: { time: '2024-11-21T00:00:00Z', speed: 3600, running: true }
+		});
+		expect((simulation as any).getHoursFromMidnight()).toBe(0);
+	});
+
+	it('returns 12.5 for 12:30', () => {
+		handleMessage({
+			type: MSG_SIM_STATE,
+			payload: { time: '2024-11-21T12:30:00Z', speed: 3600, running: true }
+		});
+		expect((simulation as any).getHoursFromMidnight()).toBe(12.5);
+	});
+
+	it('returns fractional hours for 23:59:59', () => {
+		handleMessage({
+			type: MSG_SIM_STATE,
+			payload: { time: '2024-11-21T23:59:59Z', speed: 3600, running: true }
+		});
+		const hours = (simulation as any).getHoursFromMidnight();
+		expect(hours).toBeCloseTo(23 + 59 / 60 + 59 / 3600, 2);
+	});
+});
+
+describe('autonomy formulas', () => {
+	function setSummaryForAutonomy(time: string, summary: Record<string, number>) {
+		handleMessage({
+			type: MSG_SIM_STATE,
+			payload: { time, speed: 3600, running: true }
+		});
+		handleMessage({
+			type: MSG_SUMMARY_UPDATE,
+			payload: {
+				today_kwh: 0, month_kwh: 0, total_kwh: 0,
+				grid_import_kwh: 0, grid_export_kwh: 0, pv_production_kwh: 0,
+				heat_pump_kwh: 0, heat_pump_prod_kwh: 0,
+				self_consumption_kwh: 0, home_demand_kwh: 0, battery_savings_kwh: 0,
+				...summary
+			}
+		});
+	}
+
+	it('mid-day autonomy uses hoursElapsed / demand', () => {
+		simulation.batteryCapacityKWh = 10;
+		// Init snapshot
+		setSummaryForAutonomy('2024-11-21T00:00:00Z', {
+			home_demand_kwh: 0
+		});
+		// At 12:00 with 5 kWh demand → autonomy = 10 * 12 / 5 = 24
+		setSummaryForAutonomy('2024-11-21T12:00:00Z', {
+			home_demand_kwh: 5
+		});
+
+		expect(simulation.dailyRecords[0].batteryAutonomyHours).toBeCloseTo(24, 0);
+	});
+
+	it('finalized day autonomy uses 24h / demand', () => {
+		simulation.batteryCapacityKWh = 10;
+		// Day 1
+		setSummaryForAutonomy('2024-11-21T08:00:00Z', {
+			home_demand_kwh: 0
+		});
+		setSummaryForAutonomy('2024-11-21T20:00:00Z', {
+			home_demand_kwh: 20
+		});
+		// Day transition finalizes day 1 with 24h formula
+		setSummaryForAutonomy('2024-11-22T02:00:00Z', {
+			home_demand_kwh: 24
+		});
+
+		// Finalized day 1: demand = 24, autonomy = 10 * 24 / 24 = 10
+		expect(simulation.dailyRecords[0].batteryAutonomyHours).toBeCloseTo(10, 0);
+	});
+});
+
 describe('trackDailyData', () => {
 	function setSummary(time: string, summary: Partial<{
 		today_kwh: number;
@@ -447,6 +525,66 @@ describe('trackDailyData', () => {
 		});
 
 		expect(simulation.dailyRecords[0].offGridPct).toBe(0);
+	});
+
+	it('autonomy with zero demand returns 0', () => {
+		setSummary('2024-11-21T06:00:00Z', {
+			home_demand_kwh: 0,
+			self_consumption_kwh: 0,
+			battery_savings_kwh: 0
+		});
+		setSummary('2024-11-21T12:00:00Z', {
+			home_demand_kwh: 0,
+			self_consumption_kwh: 0,
+			battery_savings_kwh: 0
+		});
+
+		expect(simulation.dailyRecords[0].batteryAutonomyHours).toBe(0);
+	});
+
+	it('multi-day skip creates intermediate records', () => {
+		// Start on Nov 21
+		setSummary('2024-11-21T12:00:00Z', {
+			grid_import_kwh: 0,
+			home_demand_kwh: 0,
+			self_consumption_kwh: 0,
+			battery_savings_kwh: 0,
+			heat_pump_kwh: 0
+		});
+
+		// Jump to Nov 24 — 3 days skipped
+		setSummary('2024-11-24T12:00:00Z', {
+			grid_import_kwh: 30,
+			home_demand_kwh: 60,
+			self_consumption_kwh: 15,
+			battery_savings_kwh: 6,
+			heat_pump_kwh: 9
+		});
+
+		// Should have 4 records: Nov 21, 22, 23, and the current Nov 24
+		expect(simulation.dailyRecords.length).toBe(4);
+		expect(simulation.dailyRecords[0].date).toBe('2024-11-21');
+		expect(simulation.dailyRecords[1].date).toBe('2024-11-22');
+		expect(simulation.dailyRecords[2].date).toBe('2024-11-23');
+		expect(simulation.dailyRecords[3].date).toBe('2024-11-24');
+
+		// Each intermediate record gets 1/3 of the total delta
+		expect(simulation.dailyRecords[0].gridImportKWh).toBeCloseTo(10, 1);
+		expect(simulation.dailyRecords[1].gridImportKWh).toBeCloseTo(10, 1);
+		expect(simulation.dailyRecords[2].gridImportKWh).toBeCloseTo(10, 1);
+	});
+
+	it('daily records cleared on seek', () => {
+		setSummary('2024-11-21T12:00:00Z', {
+			grid_import_kwh: 10,
+			home_demand_kwh: 20
+		});
+
+		expect(simulation.dailyRecords.length).toBe(1);
+
+		// Seek resets
+		simulation.seek('2024-11-21T00:00:00Z');
+		expect(simulation.dailyRecords.length).toBe(0);
 	});
 
 	it('finalizes previous day on day transition', () => {

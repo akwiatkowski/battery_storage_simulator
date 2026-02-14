@@ -154,6 +154,16 @@ func (h *Handler) handleMessage(msg []byte) {
 			h.engine.Start()
 		}
 
+	case TypeConfigUpdate:
+		var p ConfigUpdatePayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("Invalid config:update payload: %v", err)
+			return
+		}
+		h.engine.SetExportCoefficient(p.ExportCoefficient)
+		h.engine.SetPriceThreshold(p.PriceThresholdPLN)
+		h.engine.SetTempOffset(p.TempOffsetC)
+
 	default:
 		log.Printf("Unknown message type: %s", env.Type)
 	}

@@ -43,6 +43,11 @@ type Summary struct {
 	// Arbitrage strategy comparison
 	ArbNetCostPLN        float64 `json:"arb_net_cost_pln"`
 	ArbBatterySavingsPLN float64 `json:"arb_battery_savings_pln"`
+
+	// Cheap export tracking
+	CheapExportKWh    float64 `json:"cheap_export_kwh"`
+	CheapExportRevPLN float64 `json:"cheap_export_rev_pln"`
+	CurrentSpotPrice  float64 `json:"current_spot_price"`
 }
 
 // OffGridCoverage returns the percentage of adjusted home demand that could be
@@ -96,6 +101,15 @@ type ArbitrageDayRecord struct {
 	EarningsPLN        float64 `json:"earnings_pln"`
 }
 
+// PredictionComparison holds actual vs predicted values for a single timestamp.
+type PredictionComparison struct {
+	ActualPowerW    float64
+	PredictedPowerW float64
+	ActualTempC     float64
+	PredictedTempC  float64
+	HasActualTemp   bool
+}
+
 // Callback receives simulation events.
 type Callback interface {
 	OnState(state State)
@@ -104,6 +118,7 @@ type Callback interface {
 	OnBatteryUpdate(update BatteryUpdate)
 	OnBatterySummary(summary BatterySummary)
 	OnArbitrageDayLog(records []ArbitrageDayRecord)
+	OnPredictionComparison(comp PredictionComparison)
 }
 
 // Engine replays historical sensor data at configurable speed.
@@ -145,6 +160,9 @@ type Engine struct {
 	prediction     *PredictionProvider
 	savedTimeRange model.TimeRange
 
+	// Temperature sensor (for prediction comparison)
+	tempSensorID string
+
 	// Tracking for energy summaries
 	lastReadings map[string]model.Reading // last reading per sensor
 	dayStart     time.Time
@@ -163,16 +181,49 @@ type Engine struct {
 	gridImportCostPLN, gridExportRevenuePLN      float64
 	rawGridImportCostPLN, rawGridExportRevenuePLN float64
 
+	// Export coefficient (0-1, default 0.8)
+	exportCoefficient float64
+
+	// Price threshold and cheap export tracking
+	priceThresholdPLN                    float64
+	cheapExportWh, cheapExportRevenuePLN float64
+	currentSpotPrice                     float64
+
 	stopCh chan struct{}
 }
 
 func New(s *store.Store, cb Callback) *Engine {
 	return &Engine{
-		store:        s,
-		callback:     cb,
-		speed:        3600,
-		lastReadings: make(map[string]model.Reading),
+		store:             s,
+		callback:          cb,
+		speed:             3600,
+		exportCoefficient: 0.8,
+		priceThresholdPLN: 0.1,
+		lastReadings:      make(map[string]model.Reading),
 	}
+}
+
+// SetExportCoefficient sets the export revenue multiplier (0-1).
+func (e *Engine) SetExportCoefficient(c float64) {
+	e.mu.Lock()
+	e.exportCoefficient = c
+	e.mu.Unlock()
+}
+
+// SetPriceThreshold sets the PLN threshold for cheap export tracking.
+func (e *Engine) SetPriceThreshold(t float64) {
+	e.mu.Lock()
+	e.priceThresholdPLN = t
+	e.mu.Unlock()
+}
+
+// SetTempOffset sets the temperature offset for NN prediction.
+func (e *Engine) SetTempOffset(offset float64) {
+	e.mu.Lock()
+	if e.prediction != nil {
+		e.prediction.SetTempOffset(offset)
+	}
+	e.mu.Unlock()
 }
 
 // Init sets up the engine with the store's time range.
@@ -188,6 +239,11 @@ func (e *Engine) Init() bool {
 	e.simTime = tr.Start
 	e.dayStart = startOfDay(tr.Start)
 	e.monthStart = startOfMonth(tr.Start)
+
+	// Lazily initialize prediction provider for historical comparison
+	if e.prediction != nil {
+		e.prediction.EnsureInitialized(tr.Start)
+	}
 	return true
 }
 
@@ -307,6 +363,13 @@ func (e *Engine) SetPriceSensor(sensorID string) {
 	e.mu.Unlock()
 }
 
+// SetTempSensor configures the sensor used for actual temperature lookups.
+func (e *Engine) SetTempSensor(sensorID string) {
+	e.mu.Lock()
+	e.tempSensorID = sensorID
+	e.mu.Unlock()
+}
+
 // spotPrice returns the spot price at the given time. Must be called with mu held.
 func (e *Engine) spotPrice(t time.Time) float64 {
 	if e.priceSensorID == "" {
@@ -348,6 +411,9 @@ func (e *Engine) resetAccumulators() {
 	e.arbGridExportWh = 0
 	e.arbGridImportCostPLN = 0
 	e.arbGridExportRevenuePLN = 0
+	e.cheapExportWh = 0
+	e.cheapExportRevenuePLN = 0
+	e.currentSpotPrice = 0
 	e.arbThresholdDay = time.Time{}
 	e.arbLowThreshold = 0
 	e.arbHighThreshold = 0
@@ -526,7 +592,29 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 			bat := e.battery
 			altBat := e.altBattery
 			priceSensor := e.priceSensorID
+			localPred := e.prediction
+			tempSensor := e.tempSensorID
 			e.mu.Unlock()
+
+			// Prediction comparison during historical replay
+			if localPred != nil && r.Type == model.SensorGridPower {
+				if predictedPower, ok := localPred.PredictedPowerAt(r.Timestamp); ok {
+					comp := PredictionComparison{
+						ActualPowerW:    r.Value,
+						PredictedPowerW: predictedPower,
+					}
+					if predictedTemp, ok := localPred.PredictedTempAt(r.Timestamp); ok {
+						comp.PredictedTempC = predictedTemp
+						if tempSensor != "" {
+							if actualTemp, ok := e.store.ReadingAt(tempSensor, r.Timestamp); ok {
+								comp.ActualTempC = actualTemp.Value
+								comp.HasActualTemp = true
+							}
+						}
+					}
+					e.callback.OnPredictionComparison(comp)
+				}
+			}
 
 			if bat != nil && r.Type == model.SensorGridPower {
 				e.updateRawGridEnergy(r)
@@ -623,6 +711,7 @@ func (e *Engine) updateEnergy(r model.Reading) {
 	case model.SensorGridPower:
 		// Split into import (positive) and export (negative)
 		price := e.spotPrice(r.Timestamp)
+		e.currentSpotPrice = price
 		if wh > 0 {
 			e.gridImportWh += wh
 			e.gridImportCostPLN += (wh / 1000) * price
@@ -641,8 +730,14 @@ func (e *Engine) updateEnergy(r model.Reading) {
 			e.monthWh += wh
 			e.totalWh += wh
 		} else if wh < 0 {
-			e.gridExportWh += -wh
-			e.gridExportRevenuePLN += (-wh / 1000) * price
+			exportWh := -wh
+			e.gridExportWh += exportWh
+			e.gridExportRevenuePLN += (exportWh / 1000) * price * e.exportCoefficient
+			// Track cheap export
+			if price < e.priceThresholdPLN {
+				e.cheapExportWh += exportWh
+				e.cheapExportRevenuePLN += (exportWh / 1000) * price * e.exportCoefficient
+			}
 		}
 	case model.SensorPVPower:
 		if wh > 0 {
@@ -683,7 +778,7 @@ func (e *Engine) updateRawGridEnergy(r model.Reading) {
 		e.rawGridImportCostPLN += (wh / 1000) * price
 	} else if wh < 0 {
 		e.rawGridExportWh += -wh
-		e.rawGridExportRevenuePLN += (-wh / 1000) * price
+		e.rawGridExportRevenuePLN += (-wh / 1000) * price * e.exportCoefficient
 	}
 
 	e.lastReadings[key] = r
@@ -753,7 +848,7 @@ func (e *Engine) updateArbGridEnergy(r model.Reading) {
 		e.arbGridImportCostPLN += (wh / 1000) * price
 	} else if wh < 0 {
 		e.arbGridExportWh += -wh
-		e.arbGridExportRevenuePLN += (-wh / 1000) * price
+		e.arbGridExportRevenuePLN += (-wh / 1000) * price * e.exportCoefficient
 	}
 
 	e.lastReadings[key] = r
@@ -940,6 +1035,10 @@ func (e *Engine) broadcastSummary() {
 
 		ArbNetCostPLN:        arbNetCost,
 		ArbBatterySavingsPLN: arbSavingsPLN,
+
+		CheapExportKWh:    e.cheapExportWh / 1000,
+		CheapExportRevPLN: e.cheapExportRevenuePLN,
+		CurrentSpotPrice:  e.currentSpotPrice,
 	}
 	bat := e.battery
 	e.mu.Unlock()

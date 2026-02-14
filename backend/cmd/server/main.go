@@ -83,6 +83,12 @@ func main() {
 		log.Printf("Price sensor configured: %s", priceID)
 	}
 
+	// Configure temperature sensor for prediction comparison
+	if tempID := findSensorID(dataStore, model.SensorPumpExtTemp); tempID != "" {
+		engine.SetTempSensor(tempID)
+		log.Printf("Temperature sensor configured: %s", tempID)
+	}
+
 	// Attempt to load NN models for prediction mode
 	loadPredictionModels(engine, dataStore)
 

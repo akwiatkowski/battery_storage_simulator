@@ -13,13 +13,14 @@ import (
 )
 
 type mockCallback struct {
-	mu               sync.Mutex
-	states           []State
-	readings         []SensorReading
-	summaries        []Summary
-	batteryUpdates   []BatteryUpdate
-	batterySummaries []BatterySummary
-	arbitrageDayLogs [][]ArbitrageDayRecord
+	mu                    sync.Mutex
+	states                []State
+	readings              []SensorReading
+	summaries             []Summary
+	batteryUpdates        []BatteryUpdate
+	batterySummaries      []BatterySummary
+	arbitrageDayLogs      [][]ArbitrageDayRecord
+	predictionComparisons []PredictionComparison
 }
 
 func (m *mockCallback) OnState(s State) {
@@ -56,6 +57,12 @@ func (m *mockCallback) OnArbitrageDayLog(records []ArbitrageDayRecord) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.arbitrageDayLogs = append(m.arbitrageDayLogs, records)
+}
+
+func (m *mockCallback) OnPredictionComparison(comp PredictionComparison) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.predictionComparisons = append(m.predictionComparisons, comp)
 }
 
 func TestSummary_OffGridCoverage(t *testing.T) {
@@ -818,6 +825,86 @@ func TestEngine_ArbitrageDayLog_NonOverlappingWindowsAndGap(t *testing.T) {
 		rec.Date, rec.ChargeStartTime, rec.ChargeEndTime,
 		rec.DischargeStartTime, rec.DischargeEndTime,
 		rec.GapMinutes, rec.CyclesDelta, rec.EarningsPLN)
+}
+
+func TestEngine_ExportCoefficient(t *testing.T) {
+	// 3 readings: -1000W export, 1 hour apart → 2 intervals of avg -1000W
+	// Without battery: export = 2000 Wh = 2 kWh
+	// Price = 0.50 PLN/kWh, coefficient = 0.8
+	// Revenue = 2 kWh * 0.50 * 0.8 = 0.80 PLN
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	base := startTime
+	s.AddReadings([]model.Reading{
+		{Timestamp: base, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -1000, Unit: "W"},
+		{Timestamp: base.Add(hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -1000, Unit: "W"},
+		{Timestamp: base.Add(2 * hour), SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -1000, Unit: "W"},
+	})
+	s.AddReadings([]model.Reading{
+		{Timestamp: base, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		{Timestamp: base.Add(hour), SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		{Timestamp: base.Add(2 * hour), SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+	})
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+	// Default coefficient is 0.8
+
+	e.Step(3 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 2.0, summary.GridExportKWh, 0.01)
+	// Revenue = 2 kWh * 0.50 * 0.8 = 0.80
+	assert.InDelta(t, 0.80, summary.GridExportRevenuePLN, 0.01)
+
+	// With coefficient 1.0, revenue would be 1.0
+	e.Seek(e.TimeRange().Start)
+	e.SetExportCoefficient(1.0)
+	e.Step(3 * hour)
+
+	summary = cb.lastSummary()
+	assert.InDelta(t, 1.0, summary.GridExportRevenuePLN, 0.01)
+}
+
+func TestEngine_CheapExportTracking(t *testing.T) {
+	// 3 intervals: first 2 at low price (0.05), last at normal price (0.50)
+	// Grid: -1000W (export) for all
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	base := startTime
+	for h := 0; h < 4; h++ {
+		ts := base.Add(time.Duration(h) * hour)
+		s.AddReadings([]model.Reading{
+			{Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: -1000, Unit: "W"},
+		})
+		price := 0.50
+		if h < 2 {
+			price = 0.05
+		}
+		s.AddReadings([]model.Reading{
+			{Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: price, Unit: "PLN/kWh"},
+		})
+	}
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(4 * hour)
+
+	summary := cb.lastSummary()
+	// Total export: 3 kWh. Cheap export (price < 0.1): first interval (0.05) = 1 kWh
+	// The 2nd interval has avg of readings at h=1 (0.05) and h=2 (0.50), price checked at h=2 = 0.50 → not cheap
+	assert.Greater(t, summary.CheapExportKWh, 0.0, "should track cheap export")
+	assert.Greater(t, summary.CheapExportRevPLN, 0.0, "should track cheap export revenue")
+	assert.InDelta(t, 3.0, summary.GridExportKWh, 0.01, "total export should be 3 kWh")
 }
 
 func TestEngine_BatteryFullSimulation(t *testing.T) {

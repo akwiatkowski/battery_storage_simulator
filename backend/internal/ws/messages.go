@@ -64,6 +64,10 @@ type SummaryPayload struct {
 
 	ArbNetCostPLN        float64 `json:"arb_net_cost_pln"`
 	ArbBatterySavingsPLN float64 `json:"arb_battery_savings_pln"`
+
+	CheapExportKWh    float64 `json:"cheap_export_kwh"`
+	CheapExportRevPLN float64 `json:"cheap_export_rev_pln"`
+	CurrentSpotPrice  float64 `json:"current_spot_price"`
 }
 
 type SensorInfo struct {
@@ -86,26 +90,42 @@ type DataLoadedPayload struct {
 // Message type constants
 const (
 	// Client -> Server
-	TypeSimStart      = "sim:start"
-	TypeSimPause      = "sim:pause"
-	TypeSimSetSpeed   = "sim:set_speed"
-	TypeSimSeek       = "sim:seek"
-	TypeSimSetSource  = "sim:set_source"
+	TypeSimStart         = "sim:start"
+	TypeSimPause         = "sim:pause"
+	TypeSimSetSpeed      = "sim:set_speed"
+	TypeSimSeek          = "sim:seek"
+	TypeSimSetSource     = "sim:set_source"
 	TypeBatteryConfig    = "battery:config"
 	TypeSimSetPrediction = "sim:set_prediction"
+	TypeConfigUpdate     = "config:update"
 
 	// Server -> Client
-	TypeSimState          = "sim:state"
-	TypeSensorReading     = "sensor:reading"
-	TypeSummaryUpdate     = "summary:update"
-	TypeDataLoaded        = "data:loaded"
-	TypeBatteryUpdate     = "battery:update"
-	TypeBatterySummary    = "battery:summary"
-	TypeArbitrageDayLog   = "arbitrage:day_log"
+	TypeSimState              = "sim:state"
+	TypeSensorReading         = "sensor:reading"
+	TypeSummaryUpdate         = "summary:update"
+	TypeDataLoaded            = "data:loaded"
+	TypeBatteryUpdate         = "battery:update"
+	TypeBatterySummary        = "battery:summary"
+	TypeArbitrageDayLog       = "arbitrage:day_log"
+	TypePredictionComparison  = "prediction:comparison"
 )
 
 type SetPredictionPayload struct {
 	Enabled bool `json:"enabled"`
+}
+
+type ConfigUpdatePayload struct {
+	ExportCoefficient float64 `json:"export_coefficient"`
+	PriceThresholdPLN float64 `json:"price_threshold_pln"`
+	TempOffsetC       float64 `json:"temp_offset_c"`
+}
+
+type PredictionComparisonPayload struct {
+	ActualPowerW    float64 `json:"actual_power_w"`
+	PredictedPowerW float64 `json:"predicted_power_w"`
+	ActualTempC     float64 `json:"actual_temp_c"`
+	PredictedTempC  float64 `json:"predicted_temp_c"`
+	HasActualTemp   bool    `json:"has_actual_temp"`
 }
 
 // Battery payloads
@@ -213,5 +233,9 @@ func SummaryFromEngine(s simulator.Summary) SummaryPayload {
 
 		ArbNetCostPLN:        s.ArbNetCostPLN,
 		ArbBatterySavingsPLN: s.ArbBatterySavingsPLN,
+
+		CheapExportKWh:    s.CheapExportKWh,
+		CheapExportRevPLN: s.CheapExportRevPLN,
+		CurrentSpotPrice:  s.CurrentSpotPrice,
 	}
 }

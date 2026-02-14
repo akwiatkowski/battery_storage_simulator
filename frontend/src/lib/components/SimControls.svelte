@@ -107,6 +107,17 @@
 		<span>NN Predict</span>
 	</label>
 
+	{#if simulation.currentSpotPrice !== 0}
+		<span class="price-badge" class:cheap={simulation.currentSpotPrice < simulation.priceThresholdPLN && simulation.currentSpotPrice >= 0} class:negative={simulation.currentSpotPrice < 0}>
+			{simulation.currentSpotPrice.toFixed(2)} PLN
+			{#if simulation.currentSpotPrice < 0}
+				negative!
+			{:else if simulation.currentSpotPrice < simulation.priceThresholdPLN}
+				cheap export!
+			{/if}
+		</span>
+	{/if}
+
 	<span class="connection-badge" class:connected={simulation.connected}>
 		{simulation.connected ? 'Connected' : 'Disconnected'}
 	</span>
@@ -166,6 +177,26 @@
 		color: #333;
 		font-size: 13px;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+	}
+
+	.price-badge {
+		font-size: 11px;
+		color: #16a34a;
+		padding: 3px 8px;
+		border-radius: 10px;
+		background: #eafaf1;
+		white-space: nowrap;
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+	}
+
+	.price-badge.cheap {
+		color: #d97706;
+		background: #fef3c7;
+	}
+
+	.price-badge.negative {
+		color: #dc2626;
+		background: #fef2f2;
 	}
 
 	.connection-badge {

@@ -7,6 +7,7 @@ import {
 	MSG_BATTERY_UPDATE,
 	MSG_BATTERY_SUMMARY,
 	MSG_ARBITRAGE_DAY_LOG,
+	MSG_PREDICTION_COMPARISON,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
@@ -14,6 +15,7 @@ import {
 	MSG_SIM_SET_SOURCE,
 	MSG_BATTERY_CONFIG,
 	MSG_SIM_SET_PREDICTION,
+	MSG_CONFIG_UPDATE,
 	type SimStatePayload,
 	type SensorReadingPayload,
 	type SummaryPayload,
@@ -22,6 +24,7 @@ import {
 	type BatterySummaryPayload,
 	type ArbitrageDayLogPayload,
 	type ArbitrageDayRecord,
+	type PredictionComparisonPayload,
 	type SensorInfo,
 	type Envelope
 } from '$lib/ws/messages';
@@ -98,6 +101,26 @@ class SimulationStore {
 	batterySavingsPLN = $state(0);
 	arbNetCostPLN = $state(0);
 	arbBatterySavingsPLN = $state(0);
+
+	// Cheap export tracking
+	cheapExportKWh = $state(0);
+	cheapExportRevPLN = $state(0);
+	currentSpotPrice = $state(0);
+
+	// Config
+	exportCoefficient = $state(0.8);
+	priceThresholdPLN = $state(0.1);
+	tempOffsetC = $state(0);
+
+	// Prediction comparison
+	predActualPowerW = $state(0);
+	predPredictedPowerW = $state(0);
+	predActualTempC = $state(0);
+	predPredictedTempC = $state(0);
+	predHasActualTemp = $state(false);
+	predHasData = $state(false);
+	predPowerErrors = $state<number[]>([]);
+	predTempErrors = $state<number[]>([]);
 
 	// Chart data
 	chartData = $state<ChartPoint[]>([]);
@@ -216,6 +239,17 @@ class SimulationStore {
 		this.dailyRecords = [];
 		this.arbitrageDayRecords = [];
 		this.currentDayKey = '';
+		this.predHasData = false;
+		this.predPowerErrors = [];
+		this.predTempErrors = [];
+	}
+
+	sendConfig(): void {
+		this.client?.send(MSG_CONFIG_UPDATE, {
+			export_coefficient: this.exportCoefficient,
+			price_threshold_pln: this.priceThresholdPLN,
+			temp_offset_c: this.tempOffsetC
+		});
 	}
 
 	private handleMessage(envelope: Envelope): void {
@@ -277,6 +311,9 @@ class SimulationStore {
 				this.batterySavingsPLN = p.battery_savings_pln;
 				this.arbNetCostPLN = p.arb_net_cost_pln;
 				this.arbBatterySavingsPLN = p.arb_battery_savings_pln;
+				this.cheapExportKWh = p.cheap_export_kwh;
+				this.cheapExportRevPLN = p.cheap_export_rev_pln;
+				this.currentSpotPrice = p.current_spot_price;
 				this.trackDailyData(p);
 				break;
 			}
@@ -299,6 +336,21 @@ class SimulationStore {
 			case MSG_ARBITRAGE_DAY_LOG: {
 				const p = envelope.payload as ArbitrageDayLogPayload;
 				this.arbitrageDayRecords = p.records;
+				break;
+			}
+			case MSG_PREDICTION_COMPARISON: {
+				const p = envelope.payload as PredictionComparisonPayload;
+				this.predActualPowerW = p.actual_power_w;
+				this.predPredictedPowerW = p.predicted_power_w;
+				this.predActualTempC = p.actual_temp_c;
+				this.predPredictedTempC = p.predicted_temp_c;
+				this.predHasActualTemp = p.has_actual_temp;
+				this.predHasData = true;
+				// Track rolling errors (keep last 500)
+				this.predPowerErrors = [...this.predPowerErrors.slice(-499), Math.abs(p.actual_power_w - p.predicted_power_w)];
+				if (p.has_actual_temp) {
+					this.predTempErrors = [...this.predTempErrors.slice(-499), Math.abs(p.actual_temp_c - p.predicted_temp_c)];
+				}
 				break;
 			}
 			case MSG_DATA_LOADED: {
@@ -369,8 +421,66 @@ class SimulationStore {
 		const dayKey = this.simTime.slice(0, 10);
 
 		if (this.currentDayKey && dayKey !== this.currentDayKey) {
-			// Day changed — recompute previous day's values from full delta, then reset
-			this.finalizeDayRecord(p);
+			// Calculate how many days were skipped (use UTC to avoid timezone issues)
+			const prevMs = Date.UTC(
+				+this.currentDayKey.slice(0, 4),
+				+this.currentDayKey.slice(5, 7) - 1,
+				+this.currentDayKey.slice(8, 10)
+			);
+			const newMs = Date.UTC(
+				+dayKey.slice(0, 4),
+				+dayKey.slice(5, 7) - 1,
+				+dayKey.slice(8, 10)
+			);
+			const dayGap = Math.round((newMs - prevMs) / 86400000);
+
+			// Total delta across the entire gap
+			const totalGridImport = p.grid_import_kwh - this.dayStartSnapshot.gridImportKWh;
+			const totalSelfCons = p.self_consumption_kwh - this.dayStartSnapshot.selfConsumptionKWh;
+			const totalBatSavings = p.battery_savings_kwh - this.dayStartSnapshot.batterySavingsKWh;
+			const totalDemand = p.home_demand_kwh - this.dayStartSnapshot.homeDemandKWh;
+			const totalHeatPump = p.heat_pump_kwh - this.dayStartSnapshot.heatPumpKWh;
+
+			if (dayGap > 1) {
+				// Multi-day skip: distribute energy equally across all days in the gap
+				const records = [...this.dailyRecords];
+				for (let i = 0; i < dayGap; i++) {
+					const d = new Date(prevMs + i * 86400000);
+					const dk = d.toISOString().slice(0, 10);
+					const fraction = 1 / dayGap;
+					const gridImport = totalGridImport * fraction;
+					const selfCons = totalSelfCons * fraction;
+					const batSavings = totalBatSavings * fraction;
+					const demand = totalDemand * fraction;
+					const heatPump = totalHeatPump * fraction;
+					const offGrid = demand > 0 ? Math.min(100, ((selfCons + batSavings) / demand) * 100) : 0;
+					const autonomy = demand > 0 ? (this.batteryCapacityKWh * 24) / (demand * dayGap) : 0;
+
+					const rec: DailyRecord = {
+						date: dk,
+						dayOfWeek: d.getDay(),
+						gridImportKWh: gridImport,
+						selfConsumptionKWh: selfCons,
+						batterySavingsKWh: batSavings,
+						homeDemandKWh: demand,
+						heatPumpKWh: heatPump,
+						offGridPct: offGrid,
+						batteryAutonomyHours: autonomy
+					};
+
+					// Replace existing in-progress record or append
+					if (records.length > 0 && records[records.length - 1].date === dk) {
+						records[records.length - 1] = rec;
+					} else {
+						records.push(rec);
+					}
+				}
+				this.dailyRecords = records;
+			} else {
+				// Single day transition — finalize previous day
+				this.finalizeDayRecord(p);
+			}
+
 			this.dayStartSnapshot = {
 				gridImportKWh: p.grid_import_kwh,
 				selfConsumptionKWh: p.self_consumption_kwh,

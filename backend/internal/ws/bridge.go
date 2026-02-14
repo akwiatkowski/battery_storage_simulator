@@ -84,3 +84,18 @@ func (b *Bridge) OnArbitrageDayLog(records []simulator.ArbitrageDayRecord) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnPredictionComparison(comp simulator.PredictionComparison) {
+	msg, err := NewEnvelope(TypePredictionComparison, PredictionComparisonPayload{
+		ActualPowerW:    comp.ActualPowerW,
+		PredictedPowerW: comp.PredictedPowerW,
+		ActualTempC:     comp.ActualTempC,
+		PredictedTempC:  comp.PredictedTempC,
+		HasActualTemp:   comp.HasActualTemp,
+	})
+	if err != nil {
+		log.Printf("Error marshaling prediction comparison: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

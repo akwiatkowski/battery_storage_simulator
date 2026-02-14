@@ -13,6 +13,7 @@ export const MSG_SIM_SEEK = 'sim:seek';
 export const MSG_SIM_SET_SOURCE = 'sim:set_source';
 export const MSG_BATTERY_CONFIG = 'battery:config';
 export const MSG_SIM_SET_PREDICTION = 'sim:set_prediction';
+export const MSG_CONFIG_UPDATE = 'config:update';
 
 // Server -> Client
 export const MSG_SIM_STATE = 'sim:state';
@@ -22,6 +23,7 @@ export const MSG_DATA_LOADED = 'data:loaded';
 export const MSG_BATTERY_UPDATE = 'battery:update';
 export const MSG_BATTERY_SUMMARY = 'battery:summary';
 export const MSG_ARBITRAGE_DAY_LOG = 'arbitrage:day_log';
+export const MSG_PREDICTION_COMPARISON = 'prediction:comparison';
 
 export interface SetSpeedPayload {
 	speed: number;
@@ -71,6 +73,10 @@ export interface SummaryPayload {
 
 	arb_net_cost_pln: number;
 	arb_battery_savings_pln: number;
+
+	cheap_export_kwh: number;
+	cheap_export_rev_pln: number;
+	current_spot_price: number;
 }
 
 export interface SensorInfo {
@@ -130,4 +136,18 @@ export interface ArbitrageDayRecord {
 
 export interface ArbitrageDayLogPayload {
 	records: ArbitrageDayRecord[];
+}
+
+export interface ConfigUpdatePayload {
+	export_coefficient: number;
+	price_threshold_pln: number;
+	temp_offset_c: number;
+}
+
+export interface PredictionComparisonPayload {
+	actual_power_w: number;
+	predicted_power_w: number;
+	actual_temp_c: number;
+	predicted_temp_c: number;
+	has_actual_temp: boolean;
 }
