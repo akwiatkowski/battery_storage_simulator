@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	function handleExportCoeffChange(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -47,7 +48,7 @@
 	<div class="section-title">Simulation Config</div>
 	<div class="config-row">
 		<label class="config-item">
-			<span class="config-label">Export Coefficient</span>
+			<span class="config-label">Export Coefficient <HelpTip key="exportCoefficient" /></span>
 			<input
 				type="number"
 				min="0"
@@ -58,7 +59,7 @@
 			/>
 		</label>
 		<label class="config-item">
-			<span class="config-label">Cheap Export Threshold (PLN)</span>
+			<span class="config-label">Cheap Export Threshold <HelpTip key="cheapExportThreshold" /></span>
 			<input
 				type="number"
 				min="-1"
@@ -69,7 +70,7 @@
 			/>
 		</label>
 		<label class="config-item">
-			<span class="config-label">Temp Offset (C)</span>
+			<span class="config-label">Temp Offset <HelpTip key="tempOffset" /></span>
 			<input
 				type="number"
 				min="-10"
@@ -82,7 +83,7 @@
 	</div>
 	<div class="config-row" style="margin-top: 12px;">
 		<label class="config-item">
-			<span class="config-label">Fixed Tariff (PLN/kWh)</span>
+			<span class="config-label">Fixed Tariff <HelpTip key="fixedTariff" /></span>
 			<input
 				type="number"
 				min="0"
@@ -93,7 +94,7 @@
 			/>
 		</label>
 		<label class="config-item">
-			<span class="config-label">Distribution Fee (PLN/kWh)</span>
+			<span class="config-label">Distribution Fee <HelpTip key="distributionFee" /></span>
 			<input
 				type="number"
 				min="0"
@@ -104,7 +105,7 @@
 			/>
 		</label>
 		<label class="config-item">
-			<span class="config-label">Net Metering Ratio</span>
+			<span class="config-label">Net Metering Ratio <HelpTip key="netMeteringRatio" /></span>
 			<input
 				type="number"
 				min="0"
@@ -118,7 +119,7 @@
 	{#if simulation.batteryEnabled}
 		<div class="config-row" style="margin-top: 12px;">
 			<label class="config-item">
-				<span class="config-label">Battery Cost (PLN/kWh)</span>
+				<span class="config-label">Battery Cost <HelpTip key="batteryCost" /></span>
 				<input
 					type="number"
 					min="0"

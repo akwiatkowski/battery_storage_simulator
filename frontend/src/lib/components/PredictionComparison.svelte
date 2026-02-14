@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	let powerMAE = $derived(
 		simulation.predPowerErrors.length > 0
@@ -31,11 +32,11 @@
 						<span class="comp-value">{formatW(simulation.predActualPowerW)}</span>
 					</div>
 					<div class="comp-item">
-						<span class="comp-label">Predicted</span>
+						<span class="comp-label">Predicted <HelpTip key="nnPrediction" /></span>
 						<span class="comp-value predicted">{formatW(simulation.predPredictedPowerW)}</span>
 					</div>
 					<div class="comp-item">
-						<span class="comp-label">MAE</span>
+						<span class="comp-label">MAE <HelpTip key="mae" /></span>
 						<span class="comp-value mae">{formatW(powerMAE)}</span>
 					</div>
 				</div>
@@ -49,11 +50,11 @@
 							<span class="comp-value">{simulation.predActualTempC.toFixed(1)} C</span>
 						</div>
 						<div class="comp-item">
-							<span class="comp-label">Predicted</span>
+							<span class="comp-label">Predicted <HelpTip key="nnPrediction" /></span>
 							<span class="comp-value predicted">{simulation.predPredictedTempC.toFixed(1)} C</span>
 						</div>
 						<div class="comp-item">
-							<span class="comp-label">MAE</span>
+							<span class="comp-label">MAE <HelpTip key="mae" /></span>
 							<span class="comp-value mae">{tempMAE.toFixed(1)} C</span>
 						</div>
 					</div>

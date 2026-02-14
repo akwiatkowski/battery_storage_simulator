@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	function handleChange() {
 		simulation.setBatteryConfig();
@@ -21,7 +22,7 @@
 	{#if simulation.batteryEnabled}
 		<div class="config-fields">
 			<label class="field">
-				<span class="field-label">Capacity</span>
+				<span class="field-label">Capacity <HelpTip key="capacity" /></span>
 				<div class="field-input">
 					<input
 						type="number"
@@ -36,7 +37,7 @@
 			</label>
 
 			<label class="field">
-				<span class="field-label">Max Power</span>
+				<span class="field-label">Max Power <HelpTip key="maxPower" /></span>
 				<div class="field-input">
 					<input
 						type="number"
@@ -51,7 +52,7 @@
 			</label>
 
 			<label class="field">
-				<span class="field-label">Discharge to</span>
+				<span class="field-label">Discharge to <HelpTip key="dischargeTo" /></span>
 				<div class="field-input">
 					<input
 						type="number"
@@ -66,7 +67,7 @@
 			</label>
 
 			<label class="field">
-				<span class="field-label">Charge to</span>
+				<span class="field-label">Charge to <HelpTip key="chargeTo" /></span>
 				<div class="field-input">
 					<input
 						type="number"
@@ -81,7 +82,7 @@
 			</label>
 
 			<label class="field">
-				<span class="field-label">Degradation (to 80%)</span>
+				<span class="field-label">Degradation (to 80%) <HelpTip key="degradationCycles" /></span>
 				<div class="field-input">
 					<input
 						type="number"

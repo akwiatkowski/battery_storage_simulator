@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	function formatDuration(seconds: number): string {
 		if (seconds < 60) return `${seconds.toFixed(0)}s`;
@@ -37,24 +38,24 @@
 {#if simulation.batteryEnabled}
 	<div class="battery-stats">
 		<div class="stat-row">
-			<span class="stat-label">Cycles</span>
+			<span class="stat-label">Cycles <HelpTip key="cycles" /></span>
 			<span class="stat-value">{simulation.batteryCycles.toFixed(2)}</span>
 		</div>
 
 		{#if simulation.batteryDegradationPct > 0.01}
 			<div class="stat-row">
-				<span class="stat-label">Effective Capacity</span>
+				<span class="stat-label">Effective Capacity <HelpTip key="effectiveCapacity" /></span>
 				<span class="stat-value">{simulation.batteryEffectiveCapacityKWh.toFixed(1)} kWh</span>
 			</div>
 			<div class="stat-row">
-				<span class="stat-label">Degradation</span>
+				<span class="stat-label">Degradation <HelpTip key="degradation" /></span>
 				<span class="stat-value degraded">{simulation.batteryDegradationPct.toFixed(1)}%</span>
 			</div>
 		{/if}
 
 		{#if powerEntries.length > 0}
 			<div class="histogram">
-				<div class="histogram-title">Time at Power</div>
+				<div class="histogram-title">Time at Power <HelpTip key="timeAtPower" /></div>
 				{#each powerEntries as entry}
 					<div class="bar-row">
 						<span class="bar-label">{entry.bucket} kW</span>
@@ -74,7 +75,7 @@
 
 		{#if socEntries.length > 0}
 			<div class="histogram">
-				<div class="histogram-title">Time at SoC</div>
+				<div class="histogram-title">Time at SoC <HelpTip key="timeAtSoC" /></div>
 				{#each socEntries as entry}
 					<div class="bar-row">
 						<span class="bar-label">{entry.bucket}%</span>

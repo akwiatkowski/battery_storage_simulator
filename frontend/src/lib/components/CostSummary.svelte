@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	const EV_KWH_PER_100KM = 18;
 
@@ -73,15 +74,15 @@
 		<div class="section-title">Energy Costs</div>
 		<div class="cost-cards">
 			<div class="cost-card import">
-				<span class="cost-label">Import Cost</span>
+				<span class="cost-label">Import Cost <HelpTip key="importCost" /></span>
 				<span class="cost-value">{formatPLN(simulation.gridImportCostPLN)}</span>
 			</div>
 			<div class="cost-card export">
-				<span class="cost-label">Export Revenue</span>
+				<span class="cost-label">Export Revenue <HelpTip key="exportRevenue" /></span>
 				<span class="cost-value">{formatPLN(simulation.gridExportRevenuePLN)}</span>
 			</div>
 			<div class="cost-card net">
-				<span class="cost-label">Net Cost</span>
+				<span class="cost-label">Net Cost <HelpTip key="netCost" /></span>
 				<span class="cost-value">{formatPLN(simulation.netCostPLN)}</span>
 			</div>
 		</div>
@@ -91,29 +92,29 @@
 				<div class="comparison-title">Strategy Comparison</div>
 				<div class="comparison-row five-col">
 					<div class="comparison-item">
-						<span class="comp-label">No Battery</span>
+						<span class="comp-label">No Battery <HelpTip key="noBattery" /></span>
 						<span class="comp-value muted">{formatPLN(simulation.rawNetCostPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Self-Consump.</span>
+						<span class="comp-label">Self-Consump. <HelpTip key="selfConsumptionStrategy" /></span>
 						<span class="comp-value">{formatPLN(simulation.netCostPLN)}</span>
 						<span class="comp-saved">saved {formatPLN(simulation.batterySavingsPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Arbitrage</span>
+						<span class="comp-label">Arbitrage <HelpTip key="arbitrageStrategy" /></span>
 						<span class="comp-value">{formatPLN(simulation.arbNetCostPLN)}</span>
 						<span class="comp-saved">saved {formatPLN(simulation.arbBatterySavingsPLN)}</span>
 					</div>
 					{#if hasNMData}
 						<div class="comparison-item">
-							<span class="comp-label">Net Metering</span>
+							<span class="comp-label">Net Metering <HelpTip key="netMetering" /></span>
 							<span class="comp-value">{formatPLN(simulation.nmNetCostPLN)}</span>
 							<span class="comp-detail">{simulation.nmCreditBankKWh.toFixed(1)} kWh credits</span>
 						</div>
 					{/if}
 					{#if hasNBData}
 						<div class="comparison-item">
-							<span class="comp-label">Net Billing</span>
+							<span class="comp-label">Net Billing <HelpTip key="netBilling" /></span>
 							<span class="comp-value">{formatPLN(simulation.nbNetCostPLN)}</span>
 							<span class="comp-detail">{formatPLN(simulation.nbDepositPLN)} deposit</span>
 						</div>
@@ -125,16 +126,16 @@
 				<div class="comparison-title">Strategy Comparison</div>
 				<div class="comparison-row three-col">
 					<div class="comparison-item">
-						<span class="comp-label">No Battery</span>
+						<span class="comp-label">No Battery <HelpTip key="noBattery" /></span>
 						<span class="comp-value muted">{formatPLN(simulation.rawNetCostPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Self-Consumption</span>
+						<span class="comp-label">Self-Consumption <HelpTip key="selfConsumptionStrategy" /></span>
 						<span class="comp-value">{formatPLN(simulation.netCostPLN)}</span>
 						<span class="comp-saved">saved {formatPLN(simulation.batterySavingsPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Arbitrage</span>
+						<span class="comp-label">Arbitrage <HelpTip key="arbitrageStrategy" /></span>
 						<span class="comp-value">{formatPLN(simulation.arbNetCostPLN)}</span>
 						<span class="comp-saved"
 							>saved {formatPLN(simulation.arbBatterySavingsPLN)}</span
@@ -147,15 +148,15 @@
 				<div class="comparison-title">Battery Cost Impact</div>
 				<div class="comparison-row">
 					<div class="comparison-item">
-						<span class="comp-label">Without Battery</span>
+						<span class="comp-label">Without Battery <HelpTip key="noBattery" /></span>
 						<span class="comp-value muted">{formatPLN(simulation.rawNetCostPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">With Battery</span>
+						<span class="comp-label">With Battery <HelpTip key="selfConsumptionStrategy" /></span>
 						<span class="comp-value">{formatPLN(simulation.netCostPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Saved</span>
+						<span class="comp-label">Saved <HelpTip key="selfConsumptionStrategy" /></span>
 						<span class="comp-value saved">{formatPLN(simulation.batterySavingsPLN)}</span>
 					</div>
 				</div>
@@ -168,14 +169,14 @@
 				<div class="comparison-row">
 					{#if hasNMData}
 						<div class="comparison-item">
-							<span class="comp-label">Net Metering</span>
+							<span class="comp-label">Net Metering <HelpTip key="netMetering" /></span>
 							<span class="comp-value">{formatPLN(simulation.nmNetCostPLN)}</span>
 							<span class="comp-detail">{simulation.nmCreditBankKWh.toFixed(1)} kWh credits</span>
 						</div>
 					{/if}
 					{#if hasNBData}
 						<div class="comparison-item">
-							<span class="comp-label">Net Billing</span>
+							<span class="comp-label">Net Billing <HelpTip key="netBilling" /></span>
 							<span class="comp-value">{formatPLN(simulation.nbNetCostPLN)}</span>
 							<span class="comp-detail">{formatPLN(simulation.nbDepositPLN)} deposit</span>
 						</div>
@@ -189,19 +190,19 @@
 				<div class="comparison-title">Battery ROI</div>
 				<div class="comparison-row">
 					<div class="comparison-item">
-						<span class="comp-label">Investment</span>
+						<span class="comp-label">Investment <HelpTip key="investment" /></span>
 						<span class="comp-value">{formatPLN(investment)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Annual Savings</span>
+						<span class="comp-label">Annual Savings <HelpTip key="annualSavings" /></span>
 						<span class="comp-value saved">{formatPLN(annualSavings)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Payback</span>
+						<span class="comp-label">Payback <HelpTip key="payback" /></span>
 						<span class="comp-value">{simplePaybackYears.toFixed(1)} yrs</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Savings/Cycle</span>
+						<span class="comp-label">Savings/Cycle <HelpTip key="savingsPerCycle" /></span>
 						<span class="comp-value">{formatPLN(savingsPerCycle)}</span>
 					</div>
 				</div>
@@ -213,15 +214,15 @@
 				<div class="comparison-title">Cheap Export</div>
 				<div class="comparison-row">
 					<div class="comparison-item">
-						<span class="comp-label">Energy</span>
+						<span class="comp-label">Energy <HelpTip key="cheapExportEnergy" /></span>
 						<span class="comp-value warning">{simulation.cheapExportKWh.toFixed(1)} kWh</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Revenue</span>
+						<span class="comp-label">Revenue <HelpTip key="cheapExportRevenue" /></span>
 						<span class="comp-value warning">{formatPLN(simulation.cheapExportRevPLN)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">% of Export</span>
+						<span class="comp-label">% of Export <HelpTip key="cheapExportPct" /></span>
 						<span class="comp-value warning">{cheapExportPct}%</span>
 					</div>
 				</div>
@@ -233,15 +234,15 @@
 				<div class="comparison-title">EV Range (18 kWh/100km)</div>
 				<div class="comparison-row">
 					<div class="comparison-item">
-						<span class="comp-label">Avg Import Price</span>
+						<span class="comp-label">Avg Import Price <HelpTip key="avgImportPrice" /></span>
 						<span class="comp-value">{avgImportPrice.toFixed(2)} PLN/kWh</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">Cost/100km</span>
+						<span class="comp-label">Cost/100km <HelpTip key="evCost100km" /></span>
 						<span class="comp-value">{formatPLN(evCostPer100km)}</span>
 					</div>
 					<div class="comparison-item">
-						<span class="comp-label">km from Export</span>
+						<span class="comp-label">km from Export <HelpTip key="evKmFromExport" /></span>
 						<span class="comp-value">{evKmFromExport.toFixed(0)} km</span>
 					</div>
 				</div>

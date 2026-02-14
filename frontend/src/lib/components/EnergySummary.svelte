@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { simulation } from '$lib/stores/simulation.svelte';
+	import HelpTip from './HelpTip.svelte';
 
 	function formatKWh(value: number): string {
 		if (value >= 1000) {
@@ -63,15 +64,15 @@
 		<div class="section-title">Grid Import</div>
 		<div class="summary-row">
 			<div class="summary-item">
-				<span class="label">Today</span>
+				<span class="label">Today <HelpTip key="gridImportToday" /></span>
 				<span class="value">{formatKWh(simulation.todayKWh)}</span>
 			</div>
 			<div class="summary-item">
-				<span class="label">This Month</span>
+				<span class="label">This Month <HelpTip key="gridImportMonth" /></span>
 				<span class="value">{formatKWh(simulation.monthKWh)}</span>
 			</div>
 			<div class="summary-item">
-				<span class="label">Total</span>
+				<span class="label">Total <HelpTip key="gridImportTotal" /></span>
 				<span class="value">{formatKWh(simulation.totalKWh)}</span>
 			</div>
 		</div>
@@ -83,15 +84,15 @@
 			<div class="section-title">Energy Sources</div>
 			<div class="summary-row">
 				<div class="summary-item">
-					<span class="label">PV Production</span>
+					<span class="label">PV Production <HelpTip key="pvProduction" /></span>
 					<span class="value accent-pv">{formatKWh(simulation.pvProductionKWh)}</span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Self-Consumption</span>
+					<span class="label">Self-Consumption <HelpTip key="selfConsumption" /></span>
 					<span class="value accent-pv">{formatKWh(simulation.selfConsumptionKWh)} <small>({selfConsumptionPct}%)</small></span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Grid Export</span>
+					<span class="label">Grid Export <HelpTip key="gridExport" /></span>
 					<span class="value accent-export">{formatKWh(simulation.gridExportKWh)}</span>
 				</div>
 			</div>
@@ -104,26 +105,26 @@
 			<div class="section-title">Home</div>
 			<div class="summary-row">
 				<div class="summary-item">
-					<span class="label">Demand</span>
+					<span class="label">Demand <HelpTip key="homeDemand" /></span>
 					<span class="value">{formatKWh(simulation.homeDemandKWh)}</span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Heat Pump <small>(COP {cop})</small></span>
+					<span class="label">Heat Pump <HelpTip key="heatPump" /> <small>(COP {cop})</small></span>
 					<span class="value accent-pump">{formatKWh(simulation.heatPumpKWh)}</span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Appliances</span>
+					<span class="label">Appliances <HelpTip key="appliances" /></span>
 					<span class="value">{formatKWh(applianceKWh)}</span>
 				</div>
 			</div>
 			{#if hasHeatPumpCost}
 				<div class="summary-row secondary">
 					<div class="summary-item">
-						<span class="label">HP Cost</span>
+						<span class="label">HP Cost <HelpTip key="hpCost" /></span>
 						<span class="value small accent-pump">{simulation.heatPumpCostPLN.toFixed(2)} PLN</span>
 					</div>
 					<div class="summary-item">
-						<span class="label">Avg HP Price</span>
+						<span class="label">Avg HP Price <HelpTip key="hpAvgPrice" /></span>
 						<span class="value small">{heatPumpAvgPrice.toFixed(2)} PLN/kWh</span>
 					</div>
 					<div class="summary-item"></div>
@@ -146,17 +147,17 @@
 					<span class="value">{formatKWh(withBattery)}</span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Saved</span>
+					<span class="label">Saved <HelpTip key="batterySaved" /></span>
 					<span class="value accent-savings">{formatKWh(simulation.batterySavingsKWh)}</span>
 				</div>
 			</div>
 			<div class="summary-row secondary">
 				<div class="summary-item">
-					<span class="label">Savings/kWh</span>
+					<span class="label">Savings/kWh <HelpTip key="savingsPerKwh" /></span>
 					<span class="value small">{savingsPerKWh.toFixed(1)} kWh</span>
 				</div>
 				<div class="summary-item">
-					<span class="label">Off-Grid <span class="help-icon" title="Percentage of home energy demand covered by PV self-consumption and battery, without relying on grid import. Formula: (Self-Consumption + Battery Savings) / Home Demand &times; 100">?</span></span>
+					<span class="label">Off-Grid <HelpTip key="offGrid" /></span>
 					<span class="value accent-savings small">{offGridPct.toFixed(1)}%</span>
 				</div>
 				<div class="summary-item"></div>
@@ -276,21 +277,4 @@
 		color: #94a3b8;
 	}
 
-	.help-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 14px;
-		height: 14px;
-		border-radius: 50%;
-		border: 1px solid #cbd5e1;
-		font-size: 10px;
-		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-		color: #94a3b8;
-		cursor: help;
-		vertical-align: middle;
-		line-height: 1;
-		text-transform: none;
-		letter-spacing: 0;
-	}
 </style>
