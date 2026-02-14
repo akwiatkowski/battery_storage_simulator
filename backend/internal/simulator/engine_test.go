@@ -907,6 +907,119 @@ func TestEngine_CheapExportTracking(t *testing.T) {
 	assert.InDelta(t, 3.0, summary.GridExportKWh, 0.01, "total export should be 3 kWh")
 }
 
+func makeStoreWithPrices(gridValues []float64, price float64) *store.Store {
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	gridReadings := make([]model.Reading, len(gridValues))
+	priceReadings := make([]model.Reading, len(gridValues))
+	for i, v := range gridValues {
+		ts := startTime.Add(time.Duration(i) * hour)
+		gridReadings[i] = model.Reading{
+			Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: v, Unit: "W",
+		}
+		priceReadings[i] = model.Reading{
+			Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: price, Unit: "PLN/kWh",
+		}
+	}
+	s.AddReadings(gridReadings)
+	s.AddReadings(priceReadings)
+	return s
+}
+
+func TestEngine_NetMeteringCredits(t *testing.T) {
+	// 5 readings: export 1000W for 2 intervals, then import 1000W for 1 interval
+	// Export intervals: [0→1] avg=-1000, [1→2] avg=-1000 → 2 kWh export
+	// Transition [2→3]: avg(-1000,1000)=0 → no energy
+	// Import interval: [3→4] avg=1000 → 1 kWh import
+	// Credits: 2 * 0.8 = 1.6 kWh
+	// Import 1 kWh: all credited → cost = 1.0 * 0.20 = 0.20 PLN
+	// Remaining credits: 0.6 kWh
+	s := makeStoreWithPrices([]float64{-1000, -1000, -1000, 1000, 1000}, 0.50)
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(5 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 0.20, summary.NMNetCostPLN, 0.01)
+	assert.InDelta(t, 0.6, summary.NMCreditBankKWh, 0.01)
+}
+
+func TestEngine_NetMeteringCreditBank(t *testing.T) {
+	// Export only: 3 readings at -1000W = 2 intervals = 2 kWh export
+	// Credits: 2 * 0.8 = 1.6 kWh in bank, no import
+	s := makeStoreWithPrices([]float64{-1000, -1000, -1000}, 0.50)
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(3 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 0.0, summary.NMNetCostPLN, 0.001) // no import, no cost
+	assert.InDelta(t, 1.6, summary.NMCreditBankKWh, 0.01)
+}
+
+func TestEngine_NetBillingDeposit(t *testing.T) {
+	// Export only: 3 readings at -1000W = 2 kWh export
+	// Valued at RCEm (monthly avg spot price = 0.50)
+	// Deposit: 2 * 0.50 = 1.0 PLN
+	s := makeStoreWithPrices([]float64{-1000, -1000, -1000}, 0.50)
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(3 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 1.0, summary.NBDepositPLN, 0.01)
+	// No import → net cost negative (deposit available)
+	assert.InDelta(t, 0.0, summary.NBNetCostPLN, 0.01)
+}
+
+func TestEngine_NetBillingImportOffset(t *testing.T) {
+	// Export 1 kWh then import 1 kWh
+	// Export deposit: 1 kWh * 0.50 = 0.50 PLN
+	// Import cost: 1 kWh * 0.65 = 0.65 PLN
+	// Deposit offsets 0.50 PLN
+	// Net cost = 0.65 - 0.50 = 0.15 PLN
+	s := makeStoreWithPrices([]float64{-1000, -1000, 1000, 1000}, 0.50)
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(4 * hour)
+
+	summary := cb.lastSummary()
+	assert.InDelta(t, 0.15, summary.NBNetCostPLN, 0.01)
+	// All deposit consumed
+	assert.InDelta(t, 0.0, summary.NBDepositPLN, 0.01)
+}
+
+func TestEngine_NetMeteringResetOnSeek(t *testing.T) {
+	s := makeStoreWithPrices([]float64{-1000, -1000, -1000, 1000, 1000}, 0.50)
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(5 * hour)
+	assert.Greater(t, cb.lastSummary().NMNetCostPLN, 0.0)
+
+	e.Seek(startTime)
+	assert.InDelta(t, 0.0, cb.lastSummary().NMNetCostPLN, 0.001)
+	assert.InDelta(t, 0.0, cb.lastSummary().NMCreditBankKWh, 0.001)
+	assert.InDelta(t, 0.0, cb.lastSummary().NBNetCostPLN, 0.001)
+	assert.InDelta(t, 0.0, cb.lastSummary().NBDepositPLN, 0.001)
+}
+
 func TestEngine_BatteryFullSimulation(t *testing.T) {
 	// Simulate realistic pattern: export (charges battery), then consumption (discharges).
 	// Backward-looking: battery action for interval [i-1, i] uses reading[i-1]'s demand.

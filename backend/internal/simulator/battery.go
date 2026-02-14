@@ -11,6 +11,7 @@ type BatteryConfig struct {
 	MaxPowerW          float64 `json:"max_power_w"`
 	DischargeToPercent float64 `json:"discharge_to_percent"`
 	ChargeToPercent    float64 `json:"charge_to_percent"`
+	DegradationCycles  float64 `json:"degradation_cycles"` // cycles to 80% capacity, 0 = disabled
 }
 
 // ProcessResult is returned by Battery.Process for each reading.
@@ -22,11 +23,13 @@ type ProcessResult struct {
 
 // BatterySummary holds stats for WS broadcast.
 type BatterySummary struct {
-	SoCPercent       float64                       `json:"soc_percent"`
-	Cycles           float64                       `json:"cycles"`
-	TimeAtPowerSec   map[int]float64               `json:"time_at_power_sec"`
-	TimeAtSoCPctSec  map[int]float64               `json:"time_at_soc_pct_sec"`
-	MonthSoCSeconds  map[string]map[int]float64    `json:"month_soc_seconds"`
+	SoCPercent           float64                    `json:"soc_percent"`
+	Cycles               float64                    `json:"cycles"`
+	EffectiveCapacityKWh float64                    `json:"effective_capacity_kwh"`
+	DegradationPct       float64                    `json:"degradation_pct"`
+	TimeAtPowerSec       map[int]float64            `json:"time_at_power_sec"`
+	TimeAtSoCPctSec      map[int]float64            `json:"time_at_soc_pct_sec"`
+	MonthSoCSeconds      map[string]map[int]float64 `json:"month_soc_seconds"`
 }
 
 // Battery simulates a home battery storage system.
@@ -57,6 +60,19 @@ func NewBattery(cfg BatteryConfig) *Battery {
 		TimeAtSoCPctSec: make(map[int]float64),
 		MonthSoCSeconds: make(map[string]map[int]float64),
 	}
+}
+
+// EffectiveCapacityKWh returns capacity after degradation fade.
+// Linear fade from 100% to 80% over DegradationCycles full cycles.
+func (b *Battery) EffectiveCapacityKWh() float64 {
+	if b.config.DegradationCycles <= 0 {
+		return b.config.CapacityKWh
+	}
+	fade := b.Cycles() / b.config.DegradationCycles * 0.2
+	if fade > 0.2 {
+		fade = 0.2
+	}
+	return b.config.CapacityKWh * (1 - fade)
 }
 
 // Process handles one grid_power reading using self-consumption strategy.
@@ -91,7 +107,7 @@ func (b *Battery) ProcessArbitrage(gridPowerW float64, timestamp time.Time, pric
 // selfConsumptionDecision decides battery action based on home demand.
 // Positive demand → discharge to offset import, negative → charge from excess PV.
 func (b *Battery) selfConsumptionDecision(intervalDemand float64) float64 {
-	capacityWh := b.config.CapacityKWh * 1000
+	capacityWh := b.EffectiveCapacityKWh() * 1000
 	floorWh := capacityWh * b.config.DischargeToPercent / 100
 	ceilWh := capacityWh * b.config.ChargeToPercent / 100
 
@@ -115,7 +131,7 @@ func (b *Battery) selfConsumptionDecision(intervalDemand float64) float64 {
 // arbitrageDecision decides battery action based on price thresholds.
 // Charge at max when cheap, discharge at max when expensive, hold otherwise.
 func (b *Battery) arbitrageDecision(price, lowThresh, highThresh float64) float64 {
-	capacityWh := b.config.CapacityKWh * 1000
+	capacityWh := b.EffectiveCapacityKWh() * 1000
 	floorWh := capacityWh * b.config.DischargeToPercent / 100
 	ceilWh := capacityWh * b.config.ChargeToPercent / 100
 
@@ -138,7 +154,7 @@ func (b *Battery) arbitrageDecision(price, lowThresh, highThresh float64) float6
 // desiredPowerW: positive=discharge, negative=charge.
 // gridPowerW: raw grid power (for AdjustedGridW calculation).
 func (b *Battery) process(desiredPowerW, gridPowerW float64, timestamp time.Time) ProcessResult {
-	capacityWh := b.config.CapacityKWh * 1000
+	capacityWh := b.EffectiveCapacityKWh() * 1000
 	floorWh := capacityWh * b.config.DischargeToPercent / 100
 	ceilWh := capacityWh * b.config.ChargeToPercent / 100
 
@@ -223,7 +239,7 @@ func (b *Battery) recordStats(dtSec float64) {
 	b.TimeAtPowerSec[powerKW] += dtSec
 
 	// SoC bucket: round down to nearest 10%
-	capacityWh := b.config.CapacityKWh * 1000
+	capacityWh := b.EffectiveCapacityKWh() * 1000
 	socPct := 0.0
 	if capacityWh > 0 {
 		socPct = b.SoCWh / capacityWh * 100
@@ -256,17 +272,24 @@ func (b *Battery) Cycles() float64 {
 
 // Summary returns the current battery summary for broadcasting.
 func (b *Battery) Summary() BatterySummary {
-	capacityWh := b.config.CapacityKWh * 1000
+	effectiveKWh := b.EffectiveCapacityKWh()
+	capacityWh := effectiveKWh * 1000
 	socPct := 0.0
 	if capacityWh > 0 {
 		socPct = b.SoCWh / capacityWh * 100
 	}
+	var degradationPct float64
+	if b.config.CapacityKWh > 0 {
+		degradationPct = (1 - effectiveKWh/b.config.CapacityKWh) * 100
+	}
 	return BatterySummary{
-		SoCPercent:      socPct,
-		Cycles:          b.Cycles(),
-		TimeAtPowerSec:  b.TimeAtPowerSec,
-		TimeAtSoCPctSec: b.TimeAtSoCPctSec,
-		MonthSoCSeconds: b.MonthSoCSeconds,
+		SoCPercent:           socPct,
+		Cycles:               b.Cycles(),
+		EffectiveCapacityKWh: effectiveKWh,
+		DegradationPct:       degradationPct,
+		TimeAtPowerSec:       b.TimeAtPowerSec,
+		TimeAtSoCPctSec:      b.TimeAtSoCPctSec,
+		MonthSoCSeconds:      b.MonthSoCSeconds,
 	}
 }
 

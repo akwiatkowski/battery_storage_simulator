@@ -133,6 +133,7 @@ func (h *Handler) handleMessage(msg []byte) {
 				MaxPowerW:          p.MaxPowerW,
 				DischargeToPercent: p.DischargeToPercent,
 				ChargeToPercent:    p.ChargeToPercent,
+				DegradationCycles:  p.DegradationCycles,
 			}
 			h.engine.SetBattery(cfg)
 		} else {
@@ -163,6 +164,15 @@ func (h *Handler) handleMessage(msg []byte) {
 		h.engine.SetExportCoefficient(p.ExportCoefficient)
 		h.engine.SetPriceThreshold(p.PriceThresholdPLN)
 		h.engine.SetTempOffset(p.TempOffsetC)
+		if p.FixedTariffPLN > 0 {
+			h.engine.SetFixedTariff(p.FixedTariffPLN)
+		}
+		if p.DistributionFeePLN > 0 {
+			h.engine.SetDistributionFee(p.DistributionFeePLN)
+		}
+		if p.NetMeteringRatio > 0 {
+			h.engine.SetNetMeteringRatio(p.NetMeteringRatio)
+		}
 
 	default:
 		log.Printf("Unknown message type: %s", env.Type)

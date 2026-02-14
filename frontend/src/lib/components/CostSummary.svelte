@@ -19,6 +19,10 @@
 		simulation.batteryEnabled && simulation.arbBatterySavingsPLN > 0
 	);
 
+	let hasNMData = $derived(simulation.nmNetCostPLN > 0);
+	let hasNBData = $derived(simulation.nbNetCostPLN > 0 || simulation.nbDepositPLN > 0);
+	let hasFullComparison = $derived(hasArbData && (hasNMData || hasNBData));
+
 	let hasCheapExport = $derived(simulation.cheapExportKWh > 0);
 
 	let cheapExportPct = $derived(
@@ -38,6 +42,29 @@
 		simulation.gridExportKWh > 0
 			? (simulation.gridExportKWh / EV_KWH_PER_100KM) * 100
 			: 0
+	);
+
+	// ROI calculations
+	let investment = $derived(simulation.batteryCapacityKWh * simulation.batteryCostPerKWh);
+	let simDays = $derived.by(() => {
+		if (!simulation.timeRangeStart || !simulation.simTime) return 0;
+		const start = new Date(simulation.timeRangeStart).getTime();
+		const now = new Date(simulation.simTime).getTime();
+		return Math.max(0, (now - start) / 86400000);
+	});
+	let annualSavings = $derived(
+		simDays > 0 ? (simulation.batterySavingsPLN / simDays) * 365 : 0
+	);
+	let simplePaybackYears = $derived(
+		annualSavings > 0 ? investment / annualSavings : 0
+	);
+	let savingsPerCycle = $derived(
+		simulation.batteryCycles > 0
+			? simulation.batterySavingsPLN / simulation.batteryCycles
+			: 0
+	);
+	let hasROI = $derived(
+		simulation.batteryEnabled && simulation.batterySavingsPLN > 0 && simDays > 0
 	);
 </script>
 
@@ -59,7 +86,41 @@
 			</div>
 		</div>
 
-		{#if hasArbData}
+		{#if hasFullComparison}
+			<div class="battery-comparison">
+				<div class="comparison-title">Strategy Comparison</div>
+				<div class="comparison-row five-col">
+					<div class="comparison-item">
+						<span class="comp-label">No Battery</span>
+						<span class="comp-value muted">{formatPLN(simulation.rawNetCostPLN)}</span>
+					</div>
+					<div class="comparison-item">
+						<span class="comp-label">Self-Consump.</span>
+						<span class="comp-value">{formatPLN(simulation.netCostPLN)}</span>
+						<span class="comp-saved">saved {formatPLN(simulation.batterySavingsPLN)}</span>
+					</div>
+					<div class="comparison-item">
+						<span class="comp-label">Arbitrage</span>
+						<span class="comp-value">{formatPLN(simulation.arbNetCostPLN)}</span>
+						<span class="comp-saved">saved {formatPLN(simulation.arbBatterySavingsPLN)}</span>
+					</div>
+					{#if hasNMData}
+						<div class="comparison-item">
+							<span class="comp-label">Net Metering</span>
+							<span class="comp-value">{formatPLN(simulation.nmNetCostPLN)}</span>
+							<span class="comp-detail">{simulation.nmCreditBankKWh.toFixed(1)} kWh credits</span>
+						</div>
+					{/if}
+					{#if hasNBData}
+						<div class="comparison-item">
+							<span class="comp-label">Net Billing</span>
+							<span class="comp-value">{formatPLN(simulation.nbNetCostPLN)}</span>
+							<span class="comp-detail">{formatPLN(simulation.nbDepositPLN)} deposit</span>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{:else if hasArbData}
 			<div class="battery-comparison">
 				<div class="comparison-title">Strategy Comparison</div>
 				<div class="comparison-row three-col">
@@ -96,6 +157,52 @@
 					<div class="comparison-item">
 						<span class="comp-label">Saved</span>
 						<span class="comp-value saved">{formatPLN(simulation.batterySavingsPLN)}</span>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		{#if !hasFullComparison && (hasNMData || hasNBData)}
+			<div class="battery-comparison">
+				<div class="comparison-title">Tariff Comparison</div>
+				<div class="comparison-row">
+					{#if hasNMData}
+						<div class="comparison-item">
+							<span class="comp-label">Net Metering</span>
+							<span class="comp-value">{formatPLN(simulation.nmNetCostPLN)}</span>
+							<span class="comp-detail">{simulation.nmCreditBankKWh.toFixed(1)} kWh credits</span>
+						</div>
+					{/if}
+					{#if hasNBData}
+						<div class="comparison-item">
+							<span class="comp-label">Net Billing</span>
+							<span class="comp-value">{formatPLN(simulation.nbNetCostPLN)}</span>
+							<span class="comp-detail">{formatPLN(simulation.nbDepositPLN)} deposit</span>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if hasROI}
+			<div class="battery-comparison">
+				<div class="comparison-title">Battery ROI</div>
+				<div class="comparison-row">
+					<div class="comparison-item">
+						<span class="comp-label">Investment</span>
+						<span class="comp-value">{formatPLN(investment)}</span>
+					</div>
+					<div class="comparison-item">
+						<span class="comp-label">Annual Savings</span>
+						<span class="comp-value saved">{formatPLN(annualSavings)}</span>
+					</div>
+					<div class="comparison-item">
+						<span class="comp-label">Payback</span>
+						<span class="comp-value">{simplePaybackYears.toFixed(1)} yrs</span>
+					</div>
+					<div class="comparison-item">
+						<span class="comp-label">Savings/Cycle</span>
+						<span class="comp-value">{formatPLN(savingsPerCycle)}</span>
 					</div>
 				</div>
 			</div>
@@ -225,6 +332,10 @@
 		gap: 12px;
 	}
 
+	.comparison-row.five-col {
+		grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+	}
+
 	.comparison-item {
 		text-align: center;
 	}
@@ -262,6 +373,14 @@
 		display: block;
 		font-size: 11px;
 		color: #16a34a;
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+		margin-top: 2px;
+	}
+
+	.comp-detail {
+		display: block;
+		font-size: 11px;
+		color: #64748b;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		margin-top: 2px;
 	}

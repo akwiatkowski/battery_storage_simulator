@@ -75,7 +75,11 @@ describe('Message payload types', () => {
 			arb_battery_savings_pln: 35.0,
 			cheap_export_kwh: 5.0,
 			cheap_export_rev_pln: 0.25,
-			current_spot_price: 0.45
+			current_spot_price: 0.45,
+			nm_net_cost_pln: 55.0,
+			nm_credit_bank_kwh: 12.5,
+			nb_net_cost_pln: 60.0,
+			nb_deposit_pln: 8.3
 		};
 		expect(payload.today_kwh).toBe(12.3);
 	});

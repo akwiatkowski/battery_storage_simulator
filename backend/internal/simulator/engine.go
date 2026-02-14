@@ -48,6 +48,14 @@ type Summary struct {
 	CheapExportKWh    float64 `json:"cheap_export_kwh"`
 	CheapExportRevPLN float64 `json:"cheap_export_rev_pln"`
 	CurrentSpotPrice  float64 `json:"current_spot_price"`
+
+	// Net metering
+	NMNetCostPLN    float64 `json:"nm_net_cost_pln"`
+	NMCreditBankKWh float64 `json:"nm_credit_bank_kwh"`
+
+	// Net billing
+	NBNetCostPLN float64 `json:"nb_net_cost_pln"`
+	NBDepositPLN float64 `json:"nb_deposit_pln"`
 }
 
 // OffGridCoverage returns the percentage of adjusted home demand that could be
@@ -189,17 +197,40 @@ type Engine struct {
 	cheapExportWh, cheapExportRevenuePLN float64
 	currentSpotPrice                     float64
 
+	// Net metering simulation
+	fixedTariffPLN    float64 // default 0.65
+	distributionFeePLN float64 // default 0.20
+	netMeteringRatio  float64 // default 0.8
+	nmCreditBuckets   [12]float64   // rolling 12-month credit bank (kWh), indexed by month%12
+	nmCreditBucketMonth [12]time.Time // month each bucket was credited
+	nmImportCostPLN   float64 // total import cost under net metering
+	nmCreditUsedKWh   float64 // total credits consumed
+	nmCreditBankKWh   float64 // current credit balance
+
+	// Net billing simulation
+	nbDepositPLN       float64 // current PLN deposit balance
+	nbImportChargedPLN float64 // total import before deposit offset
+	nbDepositUsedPLN   float64 // total deposit consumed
+	nbExportValuedPLN  float64 // total export valued at RCEm
+
+	// RCEm cache (monthly average spot price)
+	nbRCEmMonth time.Time
+	nbRCEmValue float64
+
 	stopCh chan struct{}
 }
 
 func New(s *store.Store, cb Callback) *Engine {
 	return &Engine{
-		store:             s,
-		callback:          cb,
-		speed:             3600,
-		exportCoefficient: 0.8,
-		priceThresholdPLN: 0.1,
-		lastReadings:      make(map[string]model.Reading),
+		store:              s,
+		callback:           cb,
+		speed:              3600,
+		exportCoefficient:  0.8,
+		priceThresholdPLN:  0.1,
+		fixedTariffPLN:     0.65,
+		distributionFeePLN: 0.20,
+		netMeteringRatio:   0.8,
+		lastReadings:       make(map[string]model.Reading),
 	}
 }
 
@@ -214,6 +245,27 @@ func (e *Engine) SetExportCoefficient(c float64) {
 func (e *Engine) SetPriceThreshold(t float64) {
 	e.mu.Lock()
 	e.priceThresholdPLN = t
+	e.mu.Unlock()
+}
+
+// SetFixedTariff sets the fixed tariff rate for net metering/billing (PLN/kWh).
+func (e *Engine) SetFixedTariff(v float64) {
+	e.mu.Lock()
+	e.fixedTariffPLN = v
+	e.mu.Unlock()
+}
+
+// SetDistributionFee sets the distribution fee for net metering (PLN/kWh).
+func (e *Engine) SetDistributionFee(v float64) {
+	e.mu.Lock()
+	e.distributionFeePLN = v
+	e.mu.Unlock()
+}
+
+// SetNetMeteringRatio sets the credit ratio for net metering (e.g. 0.8 for 1:0.8).
+func (e *Engine) SetNetMeteringRatio(v float64) {
+	e.mu.Lock()
+	e.netMeteringRatio = v
 	e.mu.Unlock()
 }
 
@@ -429,6 +481,21 @@ func (e *Engine) resetAccumulators() {
 	e.arbitrageDayStartThroughputWh = 0
 	e.arbitrageDayStartRawNetCost = 0
 	e.arbitrageDayStartArbNetCost = 0
+	// Net metering reset
+	e.nmImportCostPLN = 0
+	e.nmCreditUsedKWh = 0
+	e.nmCreditBankKWh = 0
+	e.nmCreditBuckets = [12]float64{}
+	e.nmCreditBucketMonth = [12]time.Time{}
+
+	// Net billing reset
+	e.nbDepositPLN = 0
+	e.nbImportChargedPLN = 0
+	e.nbDepositUsedPLN = 0
+	e.nbExportValuedPLN = 0
+	e.nbRCEmMonth = time.Time{}
+	e.nbRCEmValue = 0
+
 	e.lastReadings = make(map[string]model.Reading)
 	if e.battery != nil {
 		e.battery.Reset()
@@ -618,6 +685,8 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 
 			if bat != nil && r.Type == model.SensorGridPower {
 				e.updateRawGridEnergy(r)
+				e.updateNetMeteringEnergy(r)
+				e.updateNetBillingEnergy(r)
 				result := bat.Process(r.Value, r.Timestamp)
 				e.callback.OnBatteryUpdate(BatteryUpdate{
 					BatteryPowerW: result.BatteryPowerW,
@@ -648,6 +717,8 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 			} else {
 				if r.Type == model.SensorGridPower {
 					e.updateRawGridEnergy(r)
+					e.updateNetMeteringEnergy(r)
+					e.updateNetBillingEnergy(r)
 				}
 				e.updateEnergy(r)
 			}
@@ -676,6 +747,8 @@ func (e *Engine) emitPredictions(prevTime, currentTime time.Time) {
 
 		if bat != nil {
 			e.updateRawGridEnergy(r)
+			e.updateNetMeteringEnergy(r)
+			e.updateNetBillingEnergy(r)
 			result := bat.Process(r.Value, r.Timestamp)
 			e.callback.OnBatteryUpdate(BatteryUpdate{
 				BatteryPowerW: result.BatteryPowerW,
@@ -688,6 +761,8 @@ func (e *Engine) emitPredictions(prevTime, currentTime time.Time) {
 			e.updateEnergy(adjusted)
 		} else {
 			e.updateRawGridEnergy(r)
+			e.updateNetMeteringEnergy(r)
+			e.updateNetBillingEnergy(r)
 			e.updateEnergy(r)
 		}
 	}
@@ -852,6 +927,146 @@ func (e *Engine) updateArbGridEnergy(r model.Reading) {
 	}
 
 	e.lastReadings[key] = r
+}
+
+func (e *Engine) updateNetMeteringEnergy(r model.Reading) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := r.SensorID + ":nm"
+	last, exists := e.lastReadings[key]
+	if !exists {
+		e.lastReadings[key] = r
+		return
+	}
+
+	hours := r.Timestamp.Sub(last.Timestamp).Hours()
+	avgPower := (last.Value + r.Value) / 2
+	wh := avgPower * hours
+	kwh := wh / 1000
+
+	curMonth := startOfMonth(r.Timestamp)
+
+	if kwh < 0 {
+		// Export: store credits at ratio
+		exportKWh := -kwh
+		creditKWh := exportKWh * e.netMeteringRatio
+		idx := int(r.Timestamp.Month()-1) % 12
+		e.nmCreditBuckets[idx] += creditKWh
+		e.nmCreditBucketMonth[idx] = curMonth
+	} else if kwh > 0 {
+		// Import: consume oldest non-expired credits first (FIFO)
+		remaining := kwh
+
+		// Expire old buckets and consume in order
+		for i := 0; i < 12 && remaining > 0; i++ {
+			// Start from oldest month relative to current
+			idx := (int(r.Timestamp.Month()) + i) % 12
+			if e.nmCreditBuckets[idx] <= 0 {
+				continue
+			}
+			// Check expiry: credit must be within 12 months
+			if !e.nmCreditBucketMonth[idx].IsZero() {
+				age := curMonth.Sub(e.nmCreditBucketMonth[idx])
+				if age > 365*24*time.Hour {
+					e.nmCreditBuckets[idx] = 0
+					continue
+				}
+			}
+			used := e.nmCreditBuckets[idx]
+			if used > remaining {
+				used = remaining
+			}
+			e.nmCreditBuckets[idx] -= used
+			remaining -= used
+			e.nmCreditUsedKWh += used
+			// Credited energy still pays distribution fee
+			e.nmImportCostPLN += used * e.distributionFeePLN
+		}
+
+		// Uncredited remainder pays full fixed tariff
+		if remaining > 0 {
+			e.nmImportCostPLN += remaining * e.fixedTariffPLN
+		}
+	}
+
+	// Update credit bank total
+	var total float64
+	for _, v := range e.nmCreditBuckets {
+		total += v
+	}
+	e.nmCreditBankKWh = total
+
+	e.lastReadings[key] = r
+}
+
+func (e *Engine) updateNetBillingEnergy(r model.Reading) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	key := r.SensorID + ":nb"
+	last, exists := e.lastReadings[key]
+	if !exists {
+		e.lastReadings[key] = r
+		return
+	}
+
+	hours := r.Timestamp.Sub(last.Timestamp).Hours()
+	avgPower := (last.Value + r.Value) / 2
+	wh := avgPower * hours
+	kwh := wh / 1000
+
+	if kwh < 0 {
+		// Export: value at RCEm (monthly average spot price) → add to deposit
+		exportKWh := -kwh
+		rcem := e.monthlyAvgSpotPriceLocked(r.Timestamp)
+		value := exportKWh * rcem
+		e.nbDepositPLN += value
+		e.nbExportValuedPLN += value
+	} else if kwh > 0 {
+		// Import: charge at fixed tariff, deduct from deposit
+		importCost := kwh * e.fixedTariffPLN
+		e.nbImportChargedPLN += importCost
+
+		if e.nbDepositPLN > 0 {
+			deduct := importCost
+			if deduct > e.nbDepositPLN {
+				deduct = e.nbDepositPLN
+			}
+			e.nbDepositPLN -= deduct
+			e.nbDepositUsedPLN += deduct
+		}
+	}
+
+	e.lastReadings[key] = r
+}
+
+// monthlyAvgSpotPriceLocked returns the monthly average spot price. Must be called with mu held.
+func (e *Engine) monthlyAvgSpotPriceLocked(t time.Time) float64 {
+	month := startOfMonth(t)
+	if month.Equal(e.nbRCEmMonth) {
+		return e.nbRCEmValue
+	}
+
+	if e.priceSensorID == "" {
+		return 0
+	}
+
+	monthEnd := month.AddDate(0, 1, 0)
+	readings := e.store.ReadingsInRange(e.priceSensorID, month, monthEnd)
+	if len(readings) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, r := range readings {
+		sum += r.Value
+	}
+	avg := sum / float64(len(readings))
+
+	e.nbRCEmMonth = month
+	e.nbRCEmValue = avg
+	return avg
 }
 
 func (e *Engine) broadcastState() {
@@ -1039,6 +1254,11 @@ func (e *Engine) broadcastSummary() {
 		CheapExportKWh:    e.cheapExportWh / 1000,
 		CheapExportRevPLN: e.cheapExportRevenuePLN,
 		CurrentSpotPrice:  e.currentSpotPrice,
+
+		NMNetCostPLN:    e.nmImportCostPLN,
+		NMCreditBankKWh: e.nmCreditBankKWh,
+		NBNetCostPLN:    e.nbImportChargedPLN - e.nbDepositUsedPLN,
+		NBDepositPLN:    e.nbDepositPLN,
 	}
 	bat := e.battery
 	e.mu.Unlock()

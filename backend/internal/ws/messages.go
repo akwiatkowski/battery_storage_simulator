@@ -68,6 +68,11 @@ type SummaryPayload struct {
 	CheapExportKWh    float64 `json:"cheap_export_kwh"`
 	CheapExportRevPLN float64 `json:"cheap_export_rev_pln"`
 	CurrentSpotPrice  float64 `json:"current_spot_price"`
+
+	NMNetCostPLN    float64 `json:"nm_net_cost_pln"`
+	NMCreditBankKWh float64 `json:"nm_credit_bank_kwh"`
+	NBNetCostPLN    float64 `json:"nb_net_cost_pln"`
+	NBDepositPLN    float64 `json:"nb_deposit_pln"`
 }
 
 type SensorInfo struct {
@@ -115,9 +120,12 @@ type SetPredictionPayload struct {
 }
 
 type ConfigUpdatePayload struct {
-	ExportCoefficient float64 `json:"export_coefficient"`
-	PriceThresholdPLN float64 `json:"price_threshold_pln"`
-	TempOffsetC       float64 `json:"temp_offset_c"`
+	ExportCoefficient  float64 `json:"export_coefficient"`
+	PriceThresholdPLN  float64 `json:"price_threshold_pln"`
+	TempOffsetC        float64 `json:"temp_offset_c"`
+	FixedTariffPLN     float64 `json:"fixed_tariff_pln"`
+	DistributionFeePLN float64 `json:"distribution_fee_pln"`
+	NetMeteringRatio   float64 `json:"net_metering_ratio"`
 }
 
 type PredictionComparisonPayload struct {
@@ -136,6 +144,7 @@ type BatteryConfigPayload struct {
 	MaxPowerW          float64 `json:"max_power_w"`
 	DischargeToPercent float64 `json:"discharge_to_percent"`
 	ChargeToPercent    float64 `json:"charge_to_percent"`
+	DegradationCycles  float64 `json:"degradation_cycles"`
 }
 
 type BatteryUpdatePayload struct {
@@ -146,11 +155,13 @@ type BatteryUpdatePayload struct {
 }
 
 type BatterySummaryPayload struct {
-	SoCPercent      float64                    `json:"soc_percent"`
-	Cycles          float64                    `json:"cycles"`
-	TimeAtPowerSec  map[int]float64            `json:"time_at_power_sec"`
-	TimeAtSoCPctSec map[int]float64            `json:"time_at_soc_pct_sec"`
-	MonthSoCSeconds map[string]map[int]float64 `json:"month_soc_seconds"`
+	SoCPercent           float64                    `json:"soc_percent"`
+	Cycles               float64                    `json:"cycles"`
+	EffectiveCapacityKWh float64                    `json:"effective_capacity_kwh"`
+	DegradationPct       float64                    `json:"degradation_pct"`
+	TimeAtPowerSec       map[int]float64            `json:"time_at_power_sec"`
+	TimeAtSoCPctSec      map[int]float64            `json:"time_at_soc_pct_sec"`
+	MonthSoCSeconds      map[string]map[int]float64 `json:"month_soc_seconds"`
 }
 
 func NewEnvelope(msgType string, payload any) ([]byte, error) {
@@ -237,5 +248,10 @@ func SummaryFromEngine(s simulator.Summary) SummaryPayload {
 		CheapExportKWh:    s.CheapExportKWh,
 		CheapExportRevPLN: s.CheapExportRevPLN,
 		CurrentSpotPrice:  s.CurrentSpotPrice,
+
+		NMNetCostPLN:    s.NMNetCostPLN,
+		NMCreditBankKWh: s.NMCreditBankKWh,
+		NBNetCostPLN:    s.NBNetCostPLN,
+		NBDepositPLN:    s.NBDepositPLN,
 	}
 }

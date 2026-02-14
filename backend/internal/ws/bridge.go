@@ -63,11 +63,13 @@ func (b *Bridge) OnBatteryUpdate(u simulator.BatteryUpdate) {
 
 func (b *Bridge) OnBatterySummary(s simulator.BatterySummary) {
 	msg, err := NewEnvelope(TypeBatterySummary, BatterySummaryPayload{
-		SoCPercent:      s.SoCPercent,
-		Cycles:          s.Cycles,
-		TimeAtPowerSec:  s.TimeAtPowerSec,
-		TimeAtSoCPctSec: s.TimeAtSoCPctSec,
-		MonthSoCSeconds: s.MonthSoCSeconds,
+		SoCPercent:           s.SoCPercent,
+		Cycles:               s.Cycles,
+		EffectiveCapacityKWh: s.EffectiveCapacityKWh,
+		DegradationPct:       s.DegradationPct,
+		TimeAtPowerSec:       s.TimeAtPowerSec,
+		TimeAtSoCPctSec:      s.TimeAtSoCPctSec,
+		MonthSoCSeconds:      s.MonthSoCSeconds,
 	})
 	if err != nil {
 		log.Printf("Error marshaling battery summary: %v", err)

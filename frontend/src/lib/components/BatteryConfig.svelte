@@ -79,6 +79,21 @@
 					<span class="field-unit">%</span>
 				</div>
 			</label>
+
+			<label class="field">
+				<span class="field-label">Degradation (to 80%)</span>
+				<div class="field-input">
+					<input
+						type="number"
+						min="0"
+						max="20000"
+						step="100"
+						bind:value={simulation.batteryDegradationCycles}
+						onchange={handleChange}
+					/>
+					<span class="field-unit">cycles</span>
+				</div>
+			</label>
 		</div>
 	{/if}
 </div>

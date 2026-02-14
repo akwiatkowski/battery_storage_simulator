@@ -111,6 +111,16 @@ class SimulationStore {
 	exportCoefficient = $state(0.8);
 	priceThresholdPLN = $state(0.1);
 	tempOffsetC = $state(0);
+	fixedTariffPLN = $state(0.65);
+	distributionFeePLN = $state(0.20);
+	netMeteringRatio = $state(0.8);
+	batteryCostPerKWh = $state(1000);
+
+	// Net metering/billing
+	nmNetCostPLN = $state(0);
+	nmCreditBankKWh = $state(0);
+	nbNetCostPLN = $state(0);
+	nbDepositPLN = $state(0);
 
 	// Prediction comparison
 	predActualPowerW = $state(0);
@@ -135,6 +145,9 @@ class SimulationStore {
 	batteryPowerW = $state(0);
 	adjustedGridW = $state(0);
 	batteryCycles = $state(0);
+	batteryDegradationCycles = $state(4000);
+	batteryEffectiveCapacityKWh = $state(0);
+	batteryDegradationPct = $state(0);
 	batteryTimeAtPowerSec = $state<Record<string, number>>({});
 	batteryTimeAtSoCPctSec = $state<Record<string, number>>({});
 	batteryMonthSoCSeconds = $state<Record<string, Record<string, number>>>({});
@@ -225,7 +238,8 @@ class SimulationStore {
 			capacity_kwh: this.batteryCapacityKWh,
 			max_power_w: this.batteryMaxPowerKW * 1000,
 			discharge_to_percent: this.batteryDischargeToPercent,
-			charge_to_percent: this.batteryChargeToPercent
+			charge_to_percent: this.batteryChargeToPercent,
+			degradation_cycles: this.batteryDegradationCycles
 		});
 		this.chartData = [];
 		this.dailyRecords = [];
@@ -248,7 +262,10 @@ class SimulationStore {
 		this.client?.send(MSG_CONFIG_UPDATE, {
 			export_coefficient: this.exportCoefficient,
 			price_threshold_pln: this.priceThresholdPLN,
-			temp_offset_c: this.tempOffsetC
+			temp_offset_c: this.tempOffsetC,
+			fixed_tariff_pln: this.fixedTariffPLN,
+			distribution_fee_pln: this.distributionFeePLN,
+			net_metering_ratio: this.netMeteringRatio
 		});
 	}
 
@@ -314,6 +331,10 @@ class SimulationStore {
 				this.cheapExportKWh = p.cheap_export_kwh;
 				this.cheapExportRevPLN = p.cheap_export_rev_pln;
 				this.currentSpotPrice = p.current_spot_price;
+				this.nmNetCostPLN = p.nm_net_cost_pln;
+				this.nmCreditBankKWh = p.nm_credit_bank_kwh;
+				this.nbNetCostPLN = p.nb_net_cost_pln;
+				this.nbDepositPLN = p.nb_deposit_pln;
 				this.trackDailyData(p);
 				break;
 			}
@@ -328,6 +349,8 @@ class SimulationStore {
 				const p = envelope.payload as BatterySummaryPayload;
 				this.batterySoCPercent = p.soc_percent;
 				this.batteryCycles = p.cycles;
+				this.batteryEffectiveCapacityKWh = p.effective_capacity_kwh;
+				this.batteryDegradationPct = p.degradation_pct;
 				this.batteryTimeAtPowerSec = p.time_at_power_sec;
 				this.batteryTimeAtSoCPctSec = p.time_at_soc_pct_sec;
 				this.batteryMonthSoCSeconds = p.month_soc_seconds ?? {};

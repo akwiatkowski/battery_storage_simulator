@@ -41,6 +41,17 @@
 			<span class="stat-value">{simulation.batteryCycles.toFixed(2)}</span>
 		</div>
 
+		{#if simulation.batteryDegradationPct > 0.01}
+			<div class="stat-row">
+				<span class="stat-label">Effective Capacity</span>
+				<span class="stat-value">{simulation.batteryEffectiveCapacityKWh.toFixed(1)} kWh</span>
+			</div>
+			<div class="stat-row">
+				<span class="stat-label">Degradation</span>
+				<span class="stat-value degraded">{simulation.batteryDegradationPct.toFixed(1)}%</span>
+			</div>
+		{/if}
+
 		{#if powerEntries.length > 0}
 			<div class="histogram">
 				<div class="histogram-title">Time at Power</div>
@@ -111,6 +122,10 @@
 		font-weight: 700;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		color: #334155;
+	}
+
+	.stat-value.degraded {
+		color: #d97706;
 	}
 
 	.histogram {

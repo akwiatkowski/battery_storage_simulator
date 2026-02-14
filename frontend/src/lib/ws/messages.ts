@@ -77,6 +77,11 @@ export interface SummaryPayload {
 	cheap_export_kwh: number;
 	cheap_export_rev_pln: number;
 	current_spot_price: number;
+
+	nm_net_cost_pln: number;
+	nm_credit_bank_kwh: number;
+	nb_net_cost_pln: number;
+	nb_deposit_pln: number;
 }
 
 export interface SensorInfo {
@@ -104,6 +109,7 @@ export interface BatteryConfigPayload {
 	max_power_w: number;
 	discharge_to_percent: number;
 	charge_to_percent: number;
+	degradation_cycles: number;
 }
 
 export interface BatteryUpdatePayload {
@@ -116,6 +122,8 @@ export interface BatteryUpdatePayload {
 export interface BatterySummaryPayload {
 	soc_percent: number;
 	cycles: number;
+	effective_capacity_kwh: number;
+	degradation_pct: number;
 	time_at_power_sec: Record<string, number>;
 	time_at_soc_pct_sec: Record<string, number>;
 	month_soc_seconds: Record<string, Record<string, number>>;
@@ -142,6 +150,9 @@ export interface ConfigUpdatePayload {
 	export_coefficient: number;
 	price_threshold_pln: number;
 	temp_offset_c: number;
+	fixed_tariff_pln: number;
+	distribution_fee_pln: number;
+	net_metering_ratio: number;
 }
 
 export interface PredictionComparisonPayload {

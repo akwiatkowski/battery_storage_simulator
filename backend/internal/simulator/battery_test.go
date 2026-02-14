@@ -242,6 +242,86 @@ func TestBattery_ArbitrageRespectsFloor(t *testing.T) {
 	assert.InDelta(t, 10, r.SoCPercent, 0.01)
 }
 
+func TestBattery_DegradationReducesCapacity(t *testing.T) {
+	cfg := BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+		DegradationCycles:  4000,
+	}
+	b := NewBattery(cfg)
+
+	// No cycles → full capacity
+	assert.InDelta(t, 10.0, b.EffectiveCapacityKWh(), 0.01)
+
+	// 2000 cycles = halfway to 80% → 10% fade → 9.0 kWh
+	b.TotalThroughputWh = 2 * 2000 * 10000 // 2000 cycles at 10kWh
+	assert.InDelta(t, 9.0, b.EffectiveCapacityKWh(), 0.01)
+
+	// 4000 cycles = full 20% fade → 8.0 kWh
+	b.TotalThroughputWh = 2 * 4000 * 10000
+	assert.InDelta(t, 8.0, b.EffectiveCapacityKWh(), 0.01)
+
+	// Beyond 4000 cycles → capped at 20% fade
+	b.TotalThroughputWh = 2 * 8000 * 10000
+	assert.InDelta(t, 8.0, b.EffectiveCapacityKWh(), 0.01)
+}
+
+func TestBattery_DegradationDisabled(t *testing.T) {
+	cfg := BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+		DegradationCycles:  0, // disabled
+	}
+	b := NewBattery(cfg)
+	b.TotalThroughputWh = 2 * 10000 * 10000 // lots of cycles
+	assert.InDelta(t, 10.0, b.EffectiveCapacityKWh(), 0.01)
+}
+
+func TestBattery_DegradationInSummary(t *testing.T) {
+	cfg := BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+		DegradationCycles:  4000,
+	}
+	b := NewBattery(cfg)
+	// 1000 cycles → 5% fade
+	b.TotalThroughputWh = 2 * 1000 * 10000
+
+	s := b.Summary()
+	assert.InDelta(t, 9.5, s.EffectiveCapacityKWh, 0.01)
+	assert.InDelta(t, 5.0, s.DegradationPct, 0.1)
+}
+
+func TestBattery_DegradationAffectsChargeCeiling(t *testing.T) {
+	cfg := BatteryConfig{
+		CapacityKWh:        10,
+		MaxPowerW:          5000,
+		DischargeToPercent: 0,
+		ChargeToPercent:    100,
+		DegradationCycles:  4000,
+	}
+	b := NewBattery(cfg)
+	// 4000 cycles → capacity = 8 kWh
+	b.TotalThroughputWh = 2 * 4000 * 10000
+	b.SoCWh = 0
+
+	// Charge for 2 hours at 5000W export → should cap at 8000 Wh (degraded ceiling)
+	b.Process(-5000, t0)
+	b.Process(-5000, t0.Add(time.Hour))
+	r := b.Process(-5000, t0.Add(2*time.Hour))
+
+	// SoC should not exceed effective capacity (8 kWh = 8000 Wh)
+	assert.LessOrEqual(t, b.SoCWh, 8000.0+0.01)
+	// SoC% should be relative to degraded capacity
+	assert.InDelta(t, 100, r.SoCPercent, 0.1)
+}
+
 func TestBattery_ArbitrageRespectsCeiling(t *testing.T) {
 	cfg := defaultBatteryConfig
 	cfg.ChargeToPercent = 90

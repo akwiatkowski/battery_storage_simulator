@@ -18,6 +18,29 @@
 		simulation.tempOffsetC = Number(target.value);
 		simulation.sendConfig();
 	}
+
+	function handleFixedTariffChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		simulation.fixedTariffPLN = Number(target.value);
+		simulation.sendConfig();
+	}
+
+	function handleDistributionFeeChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		simulation.distributionFeePLN = Number(target.value);
+		simulation.sendConfig();
+	}
+
+	function handleNetMeteringRatioChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		simulation.netMeteringRatio = Number(target.value);
+		simulation.sendConfig();
+	}
+
+	function handleBatteryCostChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		simulation.batteryCostPerKWh = Number(target.value);
+	}
 </script>
 
 <div class="config-panel">
@@ -57,6 +80,56 @@
 			/>
 		</label>
 	</div>
+	<div class="config-row" style="margin-top: 12px;">
+		<label class="config-item">
+			<span class="config-label">Fixed Tariff (PLN/kWh)</span>
+			<input
+				type="number"
+				min="0"
+				max="3"
+				step="0.01"
+				value={simulation.fixedTariffPLN}
+				onchange={handleFixedTariffChange}
+			/>
+		</label>
+		<label class="config-item">
+			<span class="config-label">Distribution Fee (PLN/kWh)</span>
+			<input
+				type="number"
+				min="0"
+				max="1"
+				step="0.01"
+				value={simulation.distributionFeePLN}
+				onchange={handleDistributionFeeChange}
+			/>
+		</label>
+		<label class="config-item">
+			<span class="config-label">Net Metering Ratio</span>
+			<input
+				type="number"
+				min="0"
+				max="1"
+				step="0.05"
+				value={simulation.netMeteringRatio}
+				onchange={handleNetMeteringRatioChange}
+			/>
+		</label>
+	</div>
+	{#if simulation.batteryEnabled}
+		<div class="config-row" style="margin-top: 12px;">
+			<label class="config-item">
+				<span class="config-label">Battery Cost (PLN/kWh)</span>
+				<input
+					type="number"
+					min="0"
+					max="10000"
+					step="50"
+					value={simulation.batteryCostPerKWh}
+					onchange={handleBatteryCostChange}
+				/>
+			</label>
+		</div>
+	{/if}
 </div>
 
 <style>
