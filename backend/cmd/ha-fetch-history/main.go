@@ -26,10 +26,17 @@ type record struct {
 	ts       float64 // unix epoch seconds
 }
 
+// weekKey returns the ISO week string for a unix timestamp, e.g. "2026-W07".
+func weekKey(ts float64) string {
+	t := time.Unix(int64(ts), int64((ts-float64(int64(ts)))*1e9))
+	year, week := t.ISOWeek()
+	return fmt.Sprintf("%04d-W%02d", year, week)
+}
+
 func main() {
 	urlFlag := flag.String("url", "", "Home Assistant base URL (overrides HA_URL)")
 	tokenFlag := flag.String("token", "", "Long-lived access token (overrides HA_TOKEN)")
-	output := flag.String("output", "input/recent/ha-fetch.csv", "Output CSV path")
+	outputDir := flag.String("output", "input/recent", "Output directory for weekly CSV files")
 	flag.Parse()
 
 	loadDotEnv(".env")
@@ -49,7 +56,7 @@ func main() {
 		log.Fatal("no entity IDs found in model.SensorHomeAssistantID")
 	}
 
-	existing, earliestTS, latestTS := loadExistingRecords(*output)
+	existing, earliestTS, latestTS := loadExistingDir(*outputDir)
 
 	endTime := time.Now()
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -87,16 +94,35 @@ func main() {
 	}
 	newRecords = append(newRecords, forward...)
 
-	merged := mergeRecords(existing, newRecords)
+	if len(newRecords) == 0 {
+		log.Printf("no new records fetched")
+		return
+	}
 
-	if err := os.MkdirAll(filepath.Dir(*output), 0o755); err != nil {
+	// Group new records by week
+	newByWeek := groupByWeek(newRecords)
+
+	// Merge with existing and write only affected week files
+	if err := os.MkdirAll(*outputDir, 0o755); err != nil {
 		log.Fatalf("creating output directory: %v", err)
 	}
-	if err := writeCSV(*output, merged); err != nil {
-		log.Fatalf("writing CSV: %v", err)
+
+	totalExisting := len(existing)
+	totalWritten := 0
+	filesWritten := 0
+	for week, newWeekRecords := range newByWeek {
+		path := filepath.Join(*outputDir, week+".csv")
+		existingWeek := loadCSVFile(path)
+		merged := mergeRecords(existingWeek, newWeekRecords)
+		if err := writeCSV(path, merged); err != nil {
+			log.Fatalf("writing %s: %v", path, err)
+		}
+		totalWritten += len(merged)
+		filesWritten++
 	}
 
-	log.Printf("wrote %d records to %s (was %d, fetched %d new)", len(merged), *output, len(existing), len(newRecords))
+	log.Printf("wrote %d records across %d weekly files (had %d existing, fetched %d new)",
+		totalWritten, filesWritten, totalExisting, len(newRecords))
 }
 
 // loadDotEnv reads a .env file and sets variables not already in the environment.
@@ -141,28 +167,49 @@ func collectEntityIDs() []string {
 	return ids
 }
 
-func loadExistingRecords(path string) (records []record, earliestTS, latestTS float64) {
+// loadExistingDir scans all CSV files in the output directory to find earliest/latest timestamps.
+func loadExistingDir(dir string) (allRecords []record, earliestTS, latestTS float64) {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.csv"))
+	if err != nil || len(matches) == 0 {
+		return nil, 0, 0
+	}
+
+	for _, path := range matches {
+		records := loadCSVFile(path)
+		for _, r := range records {
+			if r.ts > latestTS {
+				latestTS = r.ts
+			}
+			if earliestTS == 0 || r.ts < earliestTS {
+				earliestTS = r.ts
+			}
+		}
+		allRecords = append(allRecords, records...)
+	}
+
+	return allRecords, earliestTS, latestTS
+}
+
+func loadCSVFile(path string) []record {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0, 0
+		return nil
 	}
 	defer f.Close()
 
 	cr := csv.NewReader(f)
 	// skip header
 	if _, err := cr.Read(); err != nil {
-		return nil, 0, 0
+		return nil
 	}
 
+	var records []record
 	for {
 		row, err := cr.Read()
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			continue
-		}
-		if len(row) < 3 {
+		if err != nil || len(row) < 3 {
 			continue
 		}
 
@@ -180,15 +227,18 @@ func loadExistingRecords(path string) (records []record, earliestTS, latestTS fl
 			value:    value,
 			ts:       ts,
 		})
-		if ts > latestTS {
-			latestTS = ts
-		}
-		if earliestTS == 0 || ts < earliestTS {
-			earliestTS = ts
-		}
 	}
 
-	return records, earliestTS, latestTS
+	return records
+}
+
+func groupByWeek(records []record) map[string][]record {
+	byWeek := make(map[string][]record)
+	for _, r := range records {
+		wk := weekKey(r.ts)
+		byWeek[wk] = append(byWeek[wk], r)
+	}
+	return byWeek
 }
 
 func fetchRange(client *http.Client, baseURL, token string, start, end time.Time, entityIDs string) ([]record, error) {

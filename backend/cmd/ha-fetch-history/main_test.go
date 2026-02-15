@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -204,40 +205,64 @@ func TestFetchDayAuth401(t *testing.T) {
 	assert.Contains(t, err.Error(), "401")
 }
 
-func TestLoadExistingRecords(t *testing.T) {
+func TestLoadExistingDir(t *testing.T) {
 	dir := t.TempDir()
-	csvPath := filepath.Join(dir, "test.csv")
 
-	f, err := os.Create(csvPath)
-	require.NoError(t, err)
+	// Write two week files
+	writeTestCSV(t, filepath.Join(dir, "2026-W06.csv"), []record{
+		{sensorID: "sensor.a", value: 100, ts: 1000},
+		{sensorID: "sensor.a", value: 200, ts: 2000},
+	})
+	writeTestCSV(t, filepath.Join(dir, "2026-W07.csv"), []record{
+		{sensorID: "sensor.b", value: 50, ts: 3000},
+	})
 
-	w := csv.NewWriter(f)
-	w.Write([]string{"sensor_id", "value", "updated_ts"})
-	w.Write([]string{"sensor.a", "100", "1000.0000000"})
-	w.Write([]string{"sensor.a", "200", "2000.0000000"})
-	w.Write([]string{"sensor.b", "50", "1500.0000000"})
-	w.Flush()
-	f.Close()
-
-	records, minTS, maxTS := loadExistingRecords(csvPath)
+	records, minTS, maxTS := loadExistingDir(dir)
 
 	assert.Len(t, records, 3)
 	assert.Equal(t, 1000.0, minTS)
-	assert.Equal(t, 2000.0, maxTS)
-	assert.Equal(t, "sensor.a", records[0].sensorID)
-	assert.Equal(t, 100.0, records[0].value)
+	assert.Equal(t, 3000.0, maxTS)
 }
 
-func TestLoadExistingRecordsMissing(t *testing.T) {
-	records, minTS, maxTS := loadExistingRecords("/nonexistent/path.csv")
+func TestLoadExistingDirEmpty(t *testing.T) {
+	dir := t.TempDir()
+
+	records, minTS, maxTS := loadExistingDir(dir)
 	assert.Nil(t, records)
 	assert.Equal(t, 0.0, minTS)
 	assert.Equal(t, 0.0, maxTS)
 }
 
-func TestWriteCSV(t *testing.T) {
+func TestWeekKey(t *testing.T) {
+	// 2025-01-01 is Wednesday of ISO week 1
+	ts := float64(time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC).Unix())
+	assert.Equal(t, "2025-W01", weekKey(ts))
+
+	// 2025-06-15 is Sunday of ISO week 24
+	ts = float64(time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC).Unix())
+	assert.Equal(t, "2025-W24", weekKey(ts))
+}
+
+func TestGroupByWeek(t *testing.T) {
+	// Two records in same week, one in different week
+	week1ts := float64(time.Date(2025, 1, 6, 10, 0, 0, 0, time.UTC).Unix()) // Monday W02
+	week2ts := float64(time.Date(2025, 1, 13, 10, 0, 0, 0, time.UTC).Unix()) // Monday W03
+
+	records := []record{
+		{sensorID: "sensor.a", value: 100, ts: week1ts},
+		{sensorID: "sensor.a", value: 200, ts: week1ts + 3600},
+		{sensorID: "sensor.a", value: 300, ts: week2ts},
+	}
+
+	byWeek := groupByWeek(records)
+	assert.Len(t, byWeek, 2)
+	assert.Len(t, byWeek["2025-W02"], 2)
+	assert.Len(t, byWeek["2025-W03"], 1)
+}
+
+func TestWriteAndLoadCSV(t *testing.T) {
 	dir := t.TempDir()
-	csvPath := filepath.Join(dir, "out.csv")
+	csvPath := filepath.Join(dir, "test.csv")
 
 	records := []record{
 		{sensorID: "sensor.a", value: 123.456, ts: 1000.1234567},
@@ -246,23 +271,37 @@ func TestWriteCSV(t *testing.T) {
 
 	require.NoError(t, writeCSV(csvPath, records))
 
-	f, err := os.Open(csvPath)
-	require.NoError(t, err)
-	defer f.Close()
-
-	cr := csv.NewReader(f)
-	allRows, err := cr.ReadAll()
-	require.NoError(t, err)
-
-	assert.Len(t, allRows, 3) // header + 2 rows
-	assert.Equal(t, []string{"sensor_id", "value", "updated_ts"}, allRows[0])
-	assert.Equal(t, "sensor.a", allRows[1][0])
-	assert.Equal(t, "123.456", allRows[1][1])
-	assert.Equal(t, "sensor.b", allRows[2][0])
-	assert.Equal(t, "-50", allRows[2][1])
+	loaded := loadCSVFile(csvPath)
+	assert.Len(t, loaded, 2)
+	assert.Equal(t, "sensor.a", loaded[0].sensorID)
+	assert.Equal(t, 123.456, loaded[0].value)
+	assert.Equal(t, "sensor.b", loaded[1].sensorID)
+	assert.Equal(t, -50.0, loaded[1].value)
 }
 
-func mustParseTime(s string) (t time.Time) {
+func TestLoadCSVFileMissing(t *testing.T) {
+	records := loadCSVFile("/nonexistent/path.csv")
+	assert.Nil(t, records)
+}
+
+func writeTestCSV(t *testing.T, path string, records []record) {
+	t.Helper()
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	w := csv.NewWriter(f)
+	w.Write([]string{"sensor_id", "value", "updated_ts"})
+	for _, r := range records {
+		w.Write([]string{
+			r.sensorID,
+			fmt.Sprintf("%g", r.value),
+			fmt.Sprintf("%.7f", r.ts),
+		})
+	}
+	w.Flush()
+	f.Close()
+}
+
+func mustParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		panic(err)
