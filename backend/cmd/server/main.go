@@ -33,12 +33,12 @@ func main() {
 		log.Fatalf("Failed to load CSV data: %v", err)
 	}
 
-	statsRange, err := loadMultiSensorCSVs(filepath.Join(*inputDir, "stats"), &ingest.StatsParser{}, dataStore)
+	statsRange, _, err := loadMultiSensorCSVs(filepath.Join(*inputDir, "stats"), &ingest.StatsParser{}, dataStore)
 	if err != nil {
 		log.Printf("Stats data: %v", err)
 	}
 
-	recentRange, err := loadMultiSensorCSVs(filepath.Join(*inputDir, "recent"), &ingest.RecentParser{}, dataStore)
+	recentRange, recentGPRange, err := loadMultiSensorCSVs(filepath.Join(*inputDir, "recent"), &ingest.RecentParser{}, dataStore)
 	if err != nil {
 		log.Printf("Recent data: %v", err)
 	}
@@ -48,7 +48,11 @@ func main() {
 	if !archivalRange.Start.IsZero() {
 		sourceRanges["archival"] = archivalRange
 	}
-	if !recentRange.Start.IsZero() {
+	// Use grid power range for "current" source — other sensors like spot
+	// prices span years of history and would drag the start time back.
+	if !recentGPRange.Start.IsZero() {
+		sourceRanges["current"] = recentGPRange
+	} else if !recentRange.Start.IsZero() {
 		sourceRanges["current"] = recentRange
 	}
 
@@ -167,12 +171,11 @@ func loadCSVs(dir string, s *store.Store) (model.TimeRange, error) {
 
 // loadMultiSensorCSVs loads CSV files from a subdirectory using a multi-sensor
 // parser (StatsParser or RecentParser). It registers any new sensors discovered.
-// Returns the combined time range of all loaded readings.
-func loadMultiSensorCSVs(dir string, p interface{ Parse(io.Reader) ([]model.Reading, error) }, s *store.Store) (model.TimeRange, error) {
-	var tr model.TimeRange
+// Returns the combined time range and the grid-power-only time range.
+func loadMultiSensorCSVs(dir string, p interface{ Parse(io.Reader) ([]model.Reading, error) }, s *store.Store) (all, gridPower model.TimeRange, err error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return tr, fmt.Errorf("reading directory %s: %w", dir, err)
+		return all, gridPower, fmt.Errorf("reading directory %s: %w", dir, err)
 	}
 
 	for _, entry := range entries {
@@ -185,24 +188,34 @@ func loadMultiSensorCSVs(dir string, p interface{ Parse(io.Reader) ([]model.Read
 
 		f, err := os.Open(path)
 		if err != nil {
-			return tr, fmt.Errorf("opening %s: %w", path, err)
+			return all, gridPower, fmt.Errorf("opening %s: %w", path, err)
 		}
 
 		readings, err := p.Parse(f)
 		f.Close()
 		if err != nil {
-			return tr, fmt.Errorf("parsing %s: %w", path, err)
+			return all, gridPower, fmt.Errorf("parsing %s: %w", path, err)
 		}
 
 		if len(readings) > 0 {
 			registerSensorsFromReadings(readings, s)
 			s.AddReadings(readings)
-			tr = extendTimeRange(tr, readings)
+			all = extendTimeRange(all, readings)
+			for _, r := range readings {
+				if r.Type == model.SensorGridPower {
+					if gridPower.Start.IsZero() || r.Timestamp.Before(gridPower.Start) {
+						gridPower.Start = r.Timestamp
+					}
+					if r.Timestamp.After(gridPower.End) {
+						gridPower.End = r.Timestamp
+					}
+				}
+			}
 			log.Printf("  Loaded %d readings from %s", len(readings), entry.Name())
 		}
 	}
 
-	return tr, nil
+	return all, gridPower, nil
 }
 
 // registerSensorsFromReadings registers sensors discovered in multi-sensor files.
