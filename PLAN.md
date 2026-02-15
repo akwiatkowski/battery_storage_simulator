@@ -1,12 +1,17 @@
 # Future Work
 
-## 1. Heat Pump Optimization
+## ~~1. Heat Pump Optimization~~ (DONE)
 
-Model COP (Coefficient of Performance) as a function of outdoor temperature. Simulate pre-heating the house during cheap electricity hours or peak solar production, reducing grid import during expensive periods.
+~~Model COP (Coefficient of Performance) as a function of outdoor temperature.~~
 
-- COP curve: typical air-source heat pump COP ranges from ~2 at -15C to ~5 at +15C
-- Strategy: pre-heat when electricity is cheap or PV is exporting, coast during expensive hours
-- Compare thermal storage (overheating the house slightly) vs battery storage
+**Implemented:**
+- Engine tracks heat pump cost (consumption × spot price) as `heatPumpCostPLN`
+- CLI tool `cmd/load-analysis/` provides COP vs temperature curves, hourly cost distribution, shift potential analysis
+- Dashboard shows heat pump cost and average price in EnergySummary when spot price data is available
+
+**Remaining:**
+- Pre-heating strategy simulation (heat during cheap hours, coast during expensive)
+- Compare thermal storage (overheating the house) vs battery storage
 
 ## 2. Time-Series Charts
 
@@ -17,71 +22,37 @@ Add interactive line charts below the power flow diagram using layerchart, showi
 - Overlay: battery SoC, predicted vs actual values
 - Zoom/pan with scroll and drag
 
-## 3. Home Assistant WebSocket Connection
+## ~~3. Home Assistant Data Fetch~~ (PARTIALLY DONE)
 
-Connect directly to a Home Assistant instance via `ws://<host>:8123/api/websocket` for live data instead of replaying CSV files.
+**Implemented:**
+- CLI tool `cmd/ha-fetch-history/` fetches sensor history via HA REST API
+- Reads credentials from `.env` file (gitignored) or `-url`/`-token` flags
+- Bidirectional: backfills older data (up to 2 years) + appends new data
+- Output split into weekly CSV files (e.g. `2026-W07.csv`) in `input/recent/`
+- Incremental: only rewrites week files with new data, old weeks untouched
+- Handles `minimal_response` format, skips non-numeric states, deduplicates
+- Makefile target: `make ha-fetch-history`
 
-- Auth: long-lived access tokens (`Authorization: Bearer <token>`)
-- Subscribe to state changes: `subscribe_events` with `event_type: state_changed`
-- History queries: `recorder/statistics_during_period` for backfill
-- Entities to subscribe: grid power, PV, heat pump, outdoor temp, spot price
-- Dual mode: live monitoring + historical replay from HA's recorder database
+**Remaining:**
+- Live WebSocket connection (`ws://<host>:8123/api/websocket`) for real-time monitoring
+- Subscribe to `state_changed` events for live dashboard updates
+- Dual mode: live monitoring + historical replay
 
-## 4. Net Metering & Net Billing Simulation
+## ~~4. Net Metering & Net Billing Simulation~~ (DONE)
 
-Simulate Poland's two prosumer billing systems alongside the current spot-price model. Both use a fixed tariff for import.
+**Implemented:**
+- Net metering: credit bank (kWh) with configurable ratio and distribution fee
+- Net billing: PLN deposit from export at spot price, import at fixed tariff
+- CostSummary shows up to 5-way comparison (no battery, self-consumption, arbitrage, net metering, net billing)
+- SimConfig: fixed tariff, distribution fee, net metering ratio inputs
 
-### Net Metering (system opustów — pre-2022 prosumers)
+## ~~5. Battery Degradation & ROI~~ (DONE)
 
-Energy exported to grid is stored as credits at a ratio (1:0.8 for installations ≤10kWp, 1:0.7 for >10kWp). Credits are used to offset future import within a 12-month rolling window.
-
-- **Credit bank**: track exported kWh × ratio as credits, deduct from import kWh before billing
-- **12-month expiry**: credits older than 12 months are lost (track per-month buckets)
-- **No cash for surplus**: excess credits at expiry = lost energy, no payment
-- **Fixed tariff only**: import price is the contracted fixed rate (e.g. 0.65 PLN/kWh)
-- **Distribution fee**: credited energy still pays ~0.20 PLN/kWh distribution component
-
-### Net Billing (system net-billing — post April 2022)
-
-Exported energy is valued at a market reference price (RCEm — monthly average spot price). This value is credited to the prosumer's account in PLN, then used to offset import costs.
-
-- **Export valuation**: exported kWh × RCEm (monthly avg spot price) → PLN credit
-- **Import cost**: imported kWh × fixed tariff rate
-- **PLN deposit account**: export revenue accumulates as PLN balance, deducted from import bills
-- **Surplus payout**: unused PLN balance after 12 months paid out at ~20% of value (effectively lost)
-- **No 1:1 energy offset**: unlike net metering, it's purely financial — export at wholesale, import at retail
-
-### Implementation
-
-- Engine tracks three parallel cost models: spot (current), net metering credits, net billing PLN deposit
-- New section in CostSummary showing 3-way comparison
-- SimConfig: fixed tariff rate input (PLN/kWh), installation size for credit ratio selection
-- Credit/deposit state resets on seek
-
-## 5. Battery Degradation & ROI
-
-### Degradation Model
-
-Track cumulative cycle count and model capacity fade over battery lifetime.
-
-- **Capacity fade curve**: linear approximation — 80% remaining capacity at ~4000 full equivalent cycles (configurable)
-- **Effective capacity**: `originalCapacity × (1 - cycleCount / degradationCycles × 0.2)` clamped to [0.8, 1.0]
-- **Apply during simulation**: reduce usable capacity as cycles accumulate
-- **Display**: show current effective capacity %, projected months to 80% at current cycling rate
-
-### ROI Calculator
-
-Calculate return on investment for battery storage.
-
-- **Input**: battery cost per kWh of storage (default: 1000 PLN/kWh), so 10kWh = 10,000 PLN
-- **Compute from simulation**: cumulative battery savings (PLN) from self-consumption strategy
-- **Display in BatteryStats or new section**:
-  - Total investment: capacity × cost/kWh
-  - Cumulative savings to date (PLN)
-  - Simple payback: investment / (savings per simulated year)
-  - Projected payback including degradation (savings decrease as capacity fades)
-  - Savings/cycle (PLN) — efficiency metric
-- **Annualize**: extrapolate from simulation period to yearly savings rate
+**Implemented:**
+- Degradation model: linear capacity fade based on configurable cycle-to-80% parameter
+- Effective capacity displayed in BatteryStats when degradation > 0.01%
+- ROI calculator in CostSummary: investment, annual savings, payback years, savings/cycle
+- Battery cost per kWh configurable in SimConfig
 
 ## 6. Export Limiting
 
@@ -126,28 +97,19 @@ UI section similar to BatteryConfig:
 - Ignore shading, snow, soiling
 - Temperature derating: -0.4%/°C above 25°C (use outdoor temp sensor)
 
-## 8. Load Shifting Analysis
+## ~~8. Load Shifting Analysis~~ (DONE)
 
-CLI tool + collapsed dashboard section. Analyze when high-power appliances run vs when PV/cheap electricity is available.
+**Implemented:**
+- CLI tool `cmd/load-analysis/` with flags: `--input-dir`, `--shift-window`, `--min-power`, `--temp-bucket`
+- COP by temperature table for heat pump
+- Hourly energy/cost distribution for all appliance sensors
+- Shift potential analysis (current vs optimal cost within ±N hour window)
+- Auto-discovers appliance sensors (washing, oven, drier, kettle, TV)
+- Makefile target: `make load-analysis`
 
-### CLI Tool (`cmd/load-analysis/`)
-
-- Read appliance sensor data (kettle, oven, washing, drier) + PV + spot price
-- For each appliance activation (power > threshold for > N minutes):
-  - Record start time, duration, energy consumed
-  - Calculate cost at actual time vs hypothetical cost if shifted to cheapest/sunniest window
-  - Flag activations during expensive hours or when PV was exporting
-- **Output**:
-  - Per-appliance: activations count, total kWh, avg cost/kWh, potential savings if shifted
-  - Best windows: recommend time-of-day ranges with lowest avg cost (combining PV + spot)
-  - Weekly pattern: which days/hours appliances typically run
-
-### Dashboard Section (collapsed)
-
-- Summary cards: "You could save X PLN/month by running the washing machine at 10am instead of 8pm"
-- Appliance timing heatmap: hour-of-day vs day-of-week, colored by cost efficiency
-
-Lower priority — the east-oriented PV peak around 10am is already known. More useful once west panels are added (creating an afternoon sweet spot too).
+**Remaining:**
+- Dashboard section with load shifting recommendations
+- Appliance timing heatmap (hour vs day-of-week colored by cost)
 
 ## 9. Consumption Anomaly Detection
 
@@ -212,3 +174,24 @@ Compare different electricity pricing structures against each other:
 Display as a comparison table showing net cost under each tariff model for the same replay period.
 
 Partially superseded by #4 (Net Metering & Net Billing) which covers the most important Polish tariff variants.
+
+## 14. Value Explanation Modals
+
+Every numeric value displayed on the dashboard should have a small "?" button next to it. Clicking it opens a modal with a plain-language explanation of what the value means and how it's calculated. The goal is to make the dashboard understandable to someone with zero energy/technical background.
+
+### Requirements
+
+- **"?" icon button** next to each value label (small, unobtrusive, consistent with current help-icon style)
+- **Modal overlay** appears on click with:
+  - **Title**: the value name (e.g. "Self-Consumption")
+  - **What it means**: 1-2 sentence plain-language explanation
+  - **How it's calculated**: simple formula or description (e.g. "PV production that was used directly by the home instead of exported to the grid")
+  - **Example**: concrete numeric example if helpful (e.g. "If your PV produced 10 kWh and you used 7 kWh directly, self-consumption = 7 kWh (70%)")
+  - **Why it matters**: brief practical insight (e.g. "Higher self-consumption means less reliance on expensive grid electricity")
+- **Close** via X button, clicking outside, or Escape key
+- **Reusable component**: `HelpModal.svelte` with props for title, description, formula, example
+- **Content**: define all explanations in a single data file (`$lib/help-texts.ts`) for easy editing
+
+### Values to cover
+
+All values in EnergySummary, CostSummary, BatteryStats, BatteryConfig fields, SimConfig fields, and PredictionComparison. Approximately 30-40 distinct explanations.
