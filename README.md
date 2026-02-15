@@ -2,6 +2,8 @@
 
 Home energy simulator that replays historical sensor data through a WebSocket-driven dashboard. Visualize grid power, solar generation, heat pump operation, and individual appliance consumption with realistic time-accelerated playback.
 
+![Dashboard screenshot](docs/screenshot.png)
+
 ## Quick Start
 
 ```bash
@@ -45,6 +47,8 @@ See [`input/README.md`](input/README.md) for format details and sensor type refe
 - **Dual strategy comparison**: self-consumption vs. price arbitrage (when spot price data available)
 - **Cost tracking**: spot pricing, net metering, net billing, battery ROI calculator
 - **Heat pump analysis**: COP tracking, consumption cost at spot price, avg HP electricity price
+- **Seasonal heating analysis** with monthly COP breakdown and consumption anomaly detection
+- **Multi-series time-series chart** with togglable grid, PV, battery, heat pump, price, SoC, and temperature layers
 - **Neural network prediction** of temperature and grid power for synthetic data generation
 - **Heatmaps** for battery state-of-charge (teal gradient) and off-grid autonomy (amber→blue)
 - **HTML export** of full simulation report (energy, costs, arbitrage log, daily records)
