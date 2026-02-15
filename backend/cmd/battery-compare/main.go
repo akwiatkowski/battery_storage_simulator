@@ -30,6 +30,8 @@ func (c *collector) OnBatteryUpdate(simulator.BatteryUpdate)         {}
 func (c *collector) OnBatterySummary(s simulator.BatterySummary)     { c.batterySummary = s }
 func (c *collector) OnArbitrageDayLog([]simulator.ArbitrageDayRecord)       {}
 func (c *collector) OnPredictionComparison(simulator.PredictionComparison) {}
+func (c *collector) OnHeatingStats([]simulator.HeatingMonthStat)           {}
+func (c *collector) OnAnomalyDays([]simulator.AnomalyDayRecord)            {}
 
 type result struct {
 	capacity float64

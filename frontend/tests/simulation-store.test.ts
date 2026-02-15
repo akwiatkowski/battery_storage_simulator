@@ -7,6 +7,8 @@ import {
 	MSG_DATA_LOADED,
 	MSG_BATTERY_UPDATE,
 	MSG_BATTERY_SUMMARY,
+	MSG_HEATING_STATS,
+	MSG_ANOMALY_DAYS,
 	type Envelope
 } from '$lib/ws/messages';
 
@@ -31,7 +33,7 @@ function resetStore() {
 		heatPumpKWh: 0
 	};
 	simulation.dailyRecords = [];
-	simulation.chartData = [];
+	simulation.timeSeriesData = [];
 }
 
 beforeEach(() => {
@@ -129,8 +131,8 @@ describe('handleMessage: sensor:reading', () => {
 
 		expect(simulation.currentPower).toBe(1500.5);
 		expect(simulation.currentPowerTimestamp).toBe('2024-11-21T12:00:00Z');
-		expect(simulation.chartData).toHaveLength(1);
-		expect(simulation.chartData[0].value).toBe(1500.5);
+		expect(simulation.timeSeriesData).toHaveLength(1);
+		expect(simulation.timeSeriesData[0].gridPowerW).toBe(1500.5);
 	});
 
 	it('updates PV power', () => {
@@ -145,8 +147,8 @@ describe('handleMessage: sensor:reading', () => {
 		});
 
 		expect(simulation.currentPVPower).toBe(3000);
-		// PV reading should NOT add to chart data
-		expect(simulation.chartData).toHaveLength(0);
+		// PV reading should NOT add to time series data
+		expect(simulation.timeSeriesData).toHaveLength(0);
 	});
 
 	it('updates heat pump power', () => {
@@ -190,25 +192,74 @@ describe('handleMessage: sensor:reading', () => {
 		});
 
 		expect(simulation.currentPower).toBe(prevPower);
-		expect(simulation.chartData).toHaveLength(0);
+		expect(simulation.timeSeriesData).toHaveLength(0);
 	});
 
-	it('caps chart data at MAX_CHART_POINTS', () => {
-		for (let i = 0; i < 510; i++) {
+	it('caps time series data at MAX_CHART_POINTS', () => {
+		for (let i = 0; i < 2510; i++) {
 			handleMessage({
 				type: MSG_SENSOR_READING,
 				payload: {
 					sensor_id: 'sensor.grid',
 					value: i,
 					unit: 'W',
-					timestamp: `2024-11-21T12:${String(i % 60).padStart(2, '0')}:00Z`
+					timestamp: `2024-11-21T12:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60) % 60).padStart(2, '0')}Z`
 				}
 			});
 		}
 
-		expect(simulation.chartData.length).toBeLessThanOrEqual(500);
-		// Last value should be 509
-		expect(simulation.chartData[simulation.chartData.length - 1].value).toBe(509);
+		expect(simulation.timeSeriesData.length).toBeLessThanOrEqual(2500);
+		// Last value should be 2509
+		expect(simulation.timeSeriesData[simulation.timeSeriesData.length - 1].gridPowerW).toBe(2509);
+	});
+
+	it('appends time series point on battery:update when battery enabled', () => {
+		simulation.batteryEnabled = true;
+
+		// Send a grid power reading first (won't append because battery is enabled)
+		handleMessage({
+			type: MSG_SENSOR_READING,
+			payload: {
+				sensor_id: 'sensor.grid',
+				value: 2000,
+				unit: 'W',
+				timestamp: '2024-11-21T12:00:00Z'
+			}
+		});
+		expect(simulation.timeSeriesData).toHaveLength(0);
+
+		// Send PV reading
+		handleMessage({
+			type: MSG_SENSOR_READING,
+			payload: {
+				sensor_id: 'sensor.pv',
+				value: 500,
+				unit: 'W',
+				timestamp: '2024-11-21T12:00:00Z'
+			}
+		});
+
+		// Battery update triggers the snapshot
+		handleMessage({
+			type: MSG_BATTERY_UPDATE,
+			payload: {
+				battery_power_w: 1500,
+				adjusted_grid_w: 500,
+				soc_percent: 42.0,
+				timestamp: '2024-11-21T12:00:00Z'
+			}
+		});
+
+		expect(simulation.timeSeriesData).toHaveLength(1);
+		const pt = simulation.timeSeriesData[0];
+		expect(pt.gridPowerW).toBe(2000);
+		expect(pt.pvPowerW).toBe(500);
+		expect(pt.batteryPowerW).toBe(1500);
+		expect(pt.adjustedGridW).toBe(500);
+		expect(pt.batterySoCPct).toBe(42.0);
+
+		// Reset
+		simulation.batteryEnabled = false;
 	});
 });
 
@@ -623,5 +674,91 @@ describe('trackDailyData', () => {
 		// Day 2 starts fresh from transition snapshot
 		expect(simulation.dailyRecords[1].date).toBe('2024-11-22');
 		expect(simulation.dailyRecords[1].gridImportKWh).toBe(0);
+	});
+});
+
+describe('handleMessage: heating:stats', () => {
+	it('updates heating month stats', () => {
+		handleMessage({
+			type: MSG_HEATING_STATS,
+			payload: [
+				{
+					month: '2024-11',
+					consumption_kwh: 120.5,
+					production_kwh: 380.2,
+					cop: 3.15,
+					cost_pln: 48.20,
+					avg_temp_c: 4.5
+				},
+				{
+					month: '2024-12',
+					consumption_kwh: 180.3,
+					production_kwh: 450.8,
+					cop: 2.50,
+					cost_pln: 72.12,
+					avg_temp_c: -1.2
+				}
+			]
+		});
+
+		expect(simulation.heatingMonthStats).toHaveLength(2);
+		expect(simulation.heatingMonthStats[0].month).toBe('2024-11');
+		expect(simulation.heatingMonthStats[0].cop).toBe(3.15);
+		expect(simulation.heatingMonthStats[1].month).toBe('2024-12');
+		expect(simulation.heatingMonthStats[1].avg_temp_c).toBe(-1.2);
+	});
+
+	it('clears on empty array', () => {
+		handleMessage({
+			type: MSG_HEATING_STATS,
+			payload: [{ month: '2024-11', consumption_kwh: 10, production_kwh: 30, cop: 3.0, cost_pln: 5, avg_temp_c: 5 }]
+		});
+		expect(simulation.heatingMonthStats).toHaveLength(1);
+
+		handleMessage({ type: MSG_HEATING_STATS, payload: [] });
+		expect(simulation.heatingMonthStats).toHaveLength(0);
+	});
+
+	it('resets on seek', () => {
+		handleMessage({
+			type: MSG_HEATING_STATS,
+			payload: [{ month: '2024-11', consumption_kwh: 10, production_kwh: 30, cop: 3.0, cost_pln: 5, avg_temp_c: 5 }]
+		});
+		expect(simulation.heatingMonthStats).toHaveLength(1);
+
+		simulation.seek('2024-11-21T00:00:00Z');
+		expect(simulation.heatingMonthStats).toHaveLength(0);
+	});
+});
+
+describe('handleMessage: anomaly:days', () => {
+	it('updates anomaly day records', () => {
+		handleMessage({
+			type: MSG_ANOMALY_DAYS,
+			payload: [
+				{
+					date: '2024-11-25',
+					actual_kwh: 15.2,
+					predicted_kwh: 10.0,
+					deviation_pct: 52.0,
+					avg_temp_c: 3.0
+				}
+			]
+		});
+
+		expect(simulation.anomalyDayRecords).toHaveLength(1);
+		expect(simulation.anomalyDayRecords[0].date).toBe('2024-11-25');
+		expect(simulation.anomalyDayRecords[0].deviation_pct).toBe(52.0);
+	});
+
+	it('resets on seek', () => {
+		handleMessage({
+			type: MSG_ANOMALY_DAYS,
+			payload: [{ date: '2024-11-25', actual_kwh: 10, predicted_kwh: 8, deviation_pct: 25, avg_temp_c: 5 }]
+		});
+		expect(simulation.anomalyDayRecords).toHaveLength(1);
+
+		simulation.seek('2024-11-21T00:00:00Z');
+		expect(simulation.anomalyDayRecords).toHaveLength(0);
 	});
 });

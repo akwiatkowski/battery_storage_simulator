@@ -119,6 +119,35 @@ type PredictionComparison struct {
 	HasActualTemp   bool
 }
 
+// HeatingMonthStat holds per-month heating statistics.
+type HeatingMonthStat struct {
+	Month          string
+	ConsumptionKWh float64
+	ProductionKWh  float64
+	COP            float64
+	CostPLN        float64
+	AvgTempC       float64
+	TempReadings   int
+}
+
+// AnomalyDayRecord captures a day's actual vs predicted consumption deviation.
+type AnomalyDayRecord struct {
+	Date         string
+	ActualKWh    float64
+	PredictedKWh float64
+	DeviationPct float64
+	AvgTempC     float64
+}
+
+// heatingMonthAcc is a private accumulator for per-month heating data.
+type heatingMonthAcc struct {
+	consumptionWh float64
+	productionWh  float64
+	costPLN       float64
+	tempSum       float64
+	tempCount     int
+}
+
 // Callback receives simulation events.
 type Callback interface {
 	OnState(state State)
@@ -128,6 +157,8 @@ type Callback interface {
 	OnBatterySummary(summary BatterySummary)
 	OnArbitrageDayLog(records []ArbitrageDayRecord)
 	OnPredictionComparison(comp PredictionComparison)
+	OnHeatingStats(stats []HeatingMonthStat)
+	OnAnomalyDays(records []AnomalyDayRecord)
 }
 
 // Engine replays historical sensor data at configurable speed.
@@ -219,6 +250,23 @@ type Engine struct {
 	nbRCEmMonth time.Time
 	nbRCEmValue float64
 
+	// Per-month heating accumulators (keyed by "YYYY-MM")
+	heatingMonths     map[string]*heatingMonthAcc
+	heatingMonthOrder []string
+
+	// Anomaly tracking (per-day during historical replay with prediction)
+	anomalyDays           []AnomalyDayRecord
+	anomalyCurrentDay     string
+	anomalyActualWh       float64
+	anomalyPredictedWh    float64
+	anomalyTempSum        float64
+	anomalyTempCount      int
+	anomalyDirty          bool
+	anomalyLastGridTime   time.Time
+	anomalyLastActualW    float64
+	anomalyLastPredictedW float64
+	anomalyHasLastGrid    bool
+
 	stopCh chan struct{}
 }
 
@@ -233,6 +281,7 @@ func New(s *store.Store, cb Callback) *Engine {
 		distributionFeePLN: 0.20,
 		netMeteringRatio:   0.8,
 		lastReadings:       make(map[string]model.Reading),
+		heatingMonths:      make(map[string]*heatingMonthAcc),
 	}
 }
 
@@ -499,6 +548,23 @@ func (e *Engine) resetAccumulators() {
 	e.nbRCEmMonth = time.Time{}
 	e.nbRCEmValue = 0
 
+	// Heating stats reset
+	e.heatingMonths = make(map[string]*heatingMonthAcc)
+	e.heatingMonthOrder = nil
+
+	// Anomaly tracking reset
+	e.anomalyDays = nil
+	e.anomalyCurrentDay = ""
+	e.anomalyActualWh = 0
+	e.anomalyPredictedWh = 0
+	e.anomalyTempSum = 0
+	e.anomalyTempCount = 0
+	e.anomalyDirty = false
+	e.anomalyLastGridTime = time.Time{}
+	e.anomalyLastActualW = 0
+	e.anomalyLastPredictedW = 0
+	e.anomalyHasLastGrid = false
+
 	e.lastReadings = make(map[string]model.Reading)
 	if e.battery != nil {
 		e.battery.Reset()
@@ -657,6 +723,23 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 				Timestamp: r.Timestamp.Format(time.RFC3339),
 			})
 
+			// Accumulate temperature for heating months and anomaly tracking
+			if r.Type == model.SensorPumpExtTemp {
+				e.mu.Lock()
+				mk := r.Timestamp.Format("2006-01")
+				acc := e.getOrCreateHeatingMonth(mk)
+				acc.tempSum += r.Value
+				acc.tempCount++
+				if e.anomalyCurrentDay != "" {
+					dayKey := r.Timestamp.Format("2006-01-02")
+					if dayKey == e.anomalyCurrentDay {
+						e.anomalyTempSum += r.Value
+						e.anomalyTempCount++
+					}
+				}
+				e.mu.Unlock()
+			}
+
 			// When battery is active, process grid_power through battery
 			e.mu.Lock()
 			bat := e.battery
@@ -683,6 +766,35 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 						}
 					}
 					e.callback.OnPredictionComparison(comp)
+
+					// Anomaly day accumulation
+					e.mu.Lock()
+					dayKey := r.Timestamp.Format("2006-01-02")
+					if dayKey != e.anomalyCurrentDay {
+						e.finalizeAnomalyDay()
+						e.anomalyCurrentDay = dayKey
+						e.anomalyActualWh = 0
+						e.anomalyPredictedWh = 0
+						e.anomalyTempSum = 0
+						e.anomalyTempCount = 0
+						e.anomalyHasLastGrid = false
+					}
+					if e.anomalyHasLastGrid {
+						hours := r.Timestamp.Sub(e.anomalyLastGridTime).Hours()
+						avgActual := (e.anomalyLastActualW + r.Value) / 2
+						avgPredicted := (e.anomalyLastPredictedW + predictedPower) / 2
+						if avgActual > 0 {
+							e.anomalyActualWh += avgActual * hours
+						}
+						if avgPredicted > 0 {
+							e.anomalyPredictedWh += avgPredicted * hours
+						}
+					}
+					e.anomalyLastGridTime = r.Timestamp
+					e.anomalyLastActualW = r.Value
+					e.anomalyLastPredictedW = predictedPower
+					e.anomalyHasLastGrid = true
+					e.mu.Unlock()
 				}
 			}
 
@@ -825,11 +937,19 @@ func (e *Engine) updateEnergy(r model.Reading) {
 		if wh > 0 {
 			e.heatPumpWh += wh
 			price := e.spotPrice(r.Timestamp)
-			e.heatPumpCostPLN += (wh / 1000) * price
+			cost := (wh / 1000) * price
+			e.heatPumpCostPLN += cost
+			mk := r.Timestamp.Format("2006-01")
+			acc := e.getOrCreateHeatingMonth(mk)
+			acc.consumptionWh += wh
+			acc.costPLN += cost
 		}
 	case model.SensorPumpProduction:
 		if wh > 0 {
 			e.heatPumpProdWh += wh
+			mk := r.Timestamp.Format("2006-01")
+			acc := e.getOrCreateHeatingMonth(mk)
+			acc.productionWh += wh
 		}
 	}
 
@@ -1287,6 +1407,81 @@ func (e *Engine) broadcastSummary() {
 	if dirty {
 		e.callback.OnArbitrageDayLog(arbRecords)
 	}
+
+	// Broadcast heating stats
+	e.mu.Lock()
+	var heatingStats []HeatingMonthStat
+	if len(e.heatingMonths) > 0 {
+		for _, mk := range e.heatingMonthOrder {
+			acc := e.heatingMonths[mk]
+			cop := 0.0
+			if acc.consumptionWh > 0 {
+				cop = acc.productionWh / acc.consumptionWh
+			}
+			avgTemp := 0.0
+			if acc.tempCount > 0 {
+				avgTemp = acc.tempSum / float64(acc.tempCount)
+			}
+			heatingStats = append(heatingStats, HeatingMonthStat{
+				Month:          mk,
+				ConsumptionKWh: acc.consumptionWh / 1000,
+				ProductionKWh:  acc.productionWh / 1000,
+				COP:            cop,
+				CostPLN:        acc.costPLN,
+				AvgTempC:       avgTemp,
+				TempReadings:   acc.tempCount,
+			})
+		}
+	}
+	e.mu.Unlock()
+	e.callback.OnHeatingStats(heatingStats)
+
+	// Broadcast anomaly days if dirty
+	e.mu.Lock()
+	anomalyDirty := e.anomalyDirty
+	var anomalyRecords []AnomalyDayRecord
+	if anomalyDirty {
+		anomalyRecords = make([]AnomalyDayRecord, len(e.anomalyDays))
+		copy(anomalyRecords, e.anomalyDays)
+		e.anomalyDirty = false
+	}
+	e.mu.Unlock()
+	if anomalyDirty {
+		e.callback.OnAnomalyDays(anomalyRecords)
+	}
+}
+
+// getOrCreateHeatingMonth returns the accumulator for the given month key.
+// Must be called with mu held.
+func (e *Engine) getOrCreateHeatingMonth(mk string) *heatingMonthAcc {
+	acc, ok := e.heatingMonths[mk]
+	if !ok {
+		acc = &heatingMonthAcc{}
+		e.heatingMonths[mk] = acc
+		e.heatingMonthOrder = append(e.heatingMonthOrder, mk)
+	}
+	return acc
+}
+
+// finalizeAnomalyDay builds an AnomalyDayRecord for the completed day.
+// Must be called with mu held.
+func (e *Engine) finalizeAnomalyDay() {
+	if e.anomalyCurrentDay == "" || e.anomalyPredictedWh == 0 {
+		return
+	}
+	deviationPct := (e.anomalyActualWh - e.anomalyPredictedWh) / e.anomalyPredictedWh * 100
+	avgTemp := 0.0
+	if e.anomalyTempCount > 0 {
+		avgTemp = e.anomalyTempSum / float64(e.anomalyTempCount)
+	}
+	e.anomalyDays = append(e.anomalyDays, AnomalyDayRecord{
+		Date:         e.anomalyCurrentDay,
+		ActualKWh:    e.anomalyActualWh / 1000,
+		PredictedKWh: e.anomalyPredictedWh / 1000,
+		DeviationPct: deviationPct,
+		AvgTempC:     avgTemp,
+	})
+	e.anomalyDirty = true
 }
 
 func startOfDay(t time.Time) time.Time {

@@ -101,3 +101,21 @@ func (b *Bridge) OnPredictionComparison(comp simulator.PredictionComparison) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnHeatingStats(stats []simulator.HeatingMonthStat) {
+	msg, err := NewEnvelope(TypeHeatingStats, HeatingStatsFromEngine(stats))
+	if err != nil {
+		log.Printf("Error marshaling heating stats: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}
+
+func (b *Bridge) OnAnomalyDays(records []simulator.AnomalyDayRecord) {
+	msg, err := NewEnvelope(TypeAnomalyDays, AnomalyDaysFromEngine(records))
+	if err != nil {
+		log.Printf("Error marshaling anomaly days: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

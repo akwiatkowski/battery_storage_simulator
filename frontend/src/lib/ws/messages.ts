@@ -24,6 +24,8 @@ export const MSG_BATTERY_UPDATE = 'battery:update';
 export const MSG_BATTERY_SUMMARY = 'battery:summary';
 export const MSG_ARBITRAGE_DAY_LOG = 'arbitrage:day_log';
 export const MSG_PREDICTION_COMPARISON = 'prediction:comparison';
+export const MSG_HEATING_STATS = 'heating:stats';
+export const MSG_ANOMALY_DAYS = 'anomaly:days';
 
 export interface SetSpeedPayload {
 	speed: number;
@@ -162,4 +164,21 @@ export interface PredictionComparisonPayload {
 	actual_temp_c: number;
 	predicted_temp_c: number;
 	has_actual_temp: boolean;
+}
+
+export interface HeatingMonthStatPayload {
+	month: string;
+	consumption_kwh: number;
+	production_kwh: number;
+	cop: number;
+	cost_pln: number;
+	avg_temp_c: number;
+}
+
+export interface AnomalyDayPayload {
+	date: string;
+	actual_kwh: number;
+	predicted_kwh: number;
+	deviation_pct: number;
+	avg_temp_c: number;
 }

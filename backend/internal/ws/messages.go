@@ -114,6 +114,8 @@ const (
 	TypeBatterySummary        = "battery:summary"
 	TypeArbitrageDayLog       = "arbitrage:day_log"
 	TypePredictionComparison  = "prediction:comparison"
+	TypeHeatingStats          = "heating:stats"
+	TypeAnomalyDays           = "anomaly:days"
 )
 
 type SetPredictionPayload struct {
@@ -219,6 +221,56 @@ func ArbitrageDayLogFromEngine(records []simulator.ArbitrageDayRecord) Arbitrage
 		}
 	}
 	return ArbitrageDayLogPayload{Records: out}
+}
+
+// Heating stats payloads
+
+type HeatingMonthStatPayload struct {
+	Month          string  `json:"month"`
+	ConsumptionKWh float64 `json:"consumption_kwh"`
+	ProductionKWh  float64 `json:"production_kwh"`
+	COP            float64 `json:"cop"`
+	CostPLN        float64 `json:"cost_pln"`
+	AvgTempC       float64 `json:"avg_temp_c"`
+}
+
+func HeatingStatsFromEngine(stats []simulator.HeatingMonthStat) []HeatingMonthStatPayload {
+	out := make([]HeatingMonthStatPayload, len(stats))
+	for i, s := range stats {
+		out[i] = HeatingMonthStatPayload{
+			Month:          s.Month,
+			ConsumptionKWh: s.ConsumptionKWh,
+			ProductionKWh:  s.ProductionKWh,
+			COP:            s.COP,
+			CostPLN:        s.CostPLN,
+			AvgTempC:       s.AvgTempC,
+		}
+	}
+	return out
+}
+
+// Anomaly day payloads
+
+type AnomalyDayPayload struct {
+	Date         string  `json:"date"`
+	ActualKWh    float64 `json:"actual_kwh"`
+	PredictedKWh float64 `json:"predicted_kwh"`
+	DeviationPct float64 `json:"deviation_pct"`
+	AvgTempC     float64 `json:"avg_temp_c"`
+}
+
+func AnomalyDaysFromEngine(records []simulator.AnomalyDayRecord) []AnomalyDayPayload {
+	out := make([]AnomalyDayPayload, len(records))
+	for i, r := range records {
+		out[i] = AnomalyDayPayload{
+			Date:         r.Date,
+			ActualKWh:    r.ActualKWh,
+			PredictedKWh: r.PredictedKWh,
+			DeviationPct: r.DeviationPct,
+			AvgTempC:     r.AvgTempC,
+		}
+	}
+	return out
 }
 
 func SummaryFromEngine(s simulator.Summary) SummaryPayload {

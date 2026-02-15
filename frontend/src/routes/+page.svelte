@@ -12,6 +12,9 @@
 	import ArbitrageLog from '$lib/components/ArbitrageLog.svelte';
 	import SimConfig from '$lib/components/SimConfig.svelte';
 	import PredictionComparison from '$lib/components/PredictionComparison.svelte';
+	import TimeSeriesChart from '$lib/components/TimeSeriesChart.svelte';
+	import HeatingAnalysis from '$lib/components/HeatingAnalysis.svelte';
+	import AnomalyLog from '$lib/components/AnomalyLog.svelte';
 
 	onMount(() => {
 		simulation.init();
@@ -69,6 +72,7 @@
 
 	<SimControls />
 	<HomeSchema />
+	<TimeSeriesChart />
 
 	<div class="summary-grid" class:two-col={hasCostData}>
 		<EnergySummary />
@@ -89,6 +93,8 @@
 	</div>
 
 	<PredictionComparison />
+	<HeatingAnalysis />
+	<AnomalyLog />
 	<OffGridHeatmap />
 	<ArbitrageLog />
 </div>

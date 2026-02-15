@@ -21,6 +21,8 @@ type mockCallback struct {
 	batterySummaries      []BatterySummary
 	arbitrageDayLogs      [][]ArbitrageDayRecord
 	predictionComparisons []PredictionComparison
+	heatingStats          [][]HeatingMonthStat
+	anomalyDays           [][]AnomalyDayRecord
 }
 
 func (m *mockCallback) OnState(s State) {
@@ -63,6 +65,27 @@ func (m *mockCallback) OnPredictionComparison(comp PredictionComparison) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.predictionComparisons = append(m.predictionComparisons, comp)
+}
+
+func (m *mockCallback) OnHeatingStats(stats []HeatingMonthStat) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.heatingStats = append(m.heatingStats, stats)
+}
+
+func (m *mockCallback) OnAnomalyDays(records []AnomalyDayRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.anomalyDays = append(m.anomalyDays, records)
+}
+
+func (m *mockCallback) lastHeatingStats() []HeatingMonthStat {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.heatingStats) == 0 {
+		return nil
+	}
+	return m.heatingStats[len(m.heatingStats)-1]
 }
 
 func TestSummary_OffGridCoverage(t *testing.T) {
@@ -1152,4 +1175,83 @@ func TestEngine_HeatPumpCostResetOnSeek(t *testing.T) {
 
 	e.Seek(startTime)
 	assert.InDelta(t, 0.0, cb.lastSummary().HeatPumpCostPLN, 0.001)
+}
+
+func TestEngine_HeatingMonthStats(t *testing.T) {
+	// Create store with pump consumption + production + temperature over 2 months.
+	// startTime = 2024-11-21 12:00 UTC
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump_c", Name: "HP Consumption", Type: model.SensorPumpConsumption, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump_p", Name: "HP Production", Type: model.SensorPumpProduction, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.temp", Name: "Ext Temp", Type: model.SensorPumpExtTemp, Unit: "°C"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	// Nov 21: 2 hours of data
+	// Consumption 500W, Production 1500W (COP=3.0), Temp 5°C, Price 0.40
+	base := startTime
+	for h := 0; h < 3; h++ {
+		ts := base.Add(time.Duration(h) * hour)
+		s.AddReadings([]model.Reading{
+			{Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+			{Timestamp: ts, SensorID: "sensor.pump_c", Type: model.SensorPumpConsumption, Value: 500, Unit: "W"},
+			{Timestamp: ts, SensorID: "sensor.pump_p", Type: model.SensorPumpProduction, Value: 1500, Unit: "W"},
+			{Timestamp: ts, SensorID: "sensor.temp", Type: model.SensorPumpExtTemp, Value: 5.0, Unit: "°C"},
+			{Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.40, Unit: "PLN/kWh"},
+		})
+	}
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(3 * hour)
+
+	stats := cb.lastHeatingStats()
+	require.NotNil(t, stats, "should have heating stats")
+	require.Equal(t, 1, len(stats))
+
+	st := stats[0]
+	assert.Equal(t, "2024-11", st.Month)
+	// 500W * 2h = 1000Wh = 1.0 kWh consumption
+	assert.InDelta(t, 1.0, st.ConsumptionKWh, 0.01)
+	// 1500W * 2h = 3000Wh = 3.0 kWh production
+	assert.InDelta(t, 3.0, st.ProductionKWh, 0.01)
+	// COP = 3.0 / 1.0 = 3.0
+	assert.InDelta(t, 3.0, st.COP, 0.01)
+	// Cost: 1.0 kWh * 0.40 = 0.40 PLN
+	assert.InDelta(t, 0.40, st.CostPLN, 0.01)
+	// Temperature: 3 readings of 5°C → avg 5.0
+	assert.InDelta(t, 5.0, st.AvgTempC, 0.01)
+	assert.Equal(t, 3, st.TempReadings)
+}
+
+func TestEngine_HeatingMonthStatsResetOnSeek(t *testing.T) {
+	s := store.New()
+	s.AddSensor(model.Sensor{ID: "sensor.grid", Name: "Grid Power", Type: model.SensorGridPower, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.pump_c", Name: "HP Consumption", Type: model.SensorPumpConsumption, Unit: "W"})
+	s.AddSensor(model.Sensor{ID: "sensor.price", Name: "Price", Type: model.SensorEnergyPrice, Unit: "PLN/kWh"})
+
+	for h := 0; h < 3; h++ {
+		ts := startTime.Add(time.Duration(h) * hour)
+		s.AddReadings([]model.Reading{
+			{Timestamp: ts, SensorID: "sensor.grid", Type: model.SensorGridPower, Value: 500, Unit: "W"},
+			{Timestamp: ts, SensorID: "sensor.pump_c", Type: model.SensorPumpConsumption, Value: 300, Unit: "W"},
+			{Timestamp: ts, SensorID: "sensor.price", Type: model.SensorEnergyPrice, Value: 0.50, Unit: "PLN/kWh"},
+		})
+	}
+
+	cb := &mockCallback{}
+	e := New(s, cb)
+	e.Init()
+	e.SetPriceSensor("sensor.price")
+
+	e.Step(3 * hour)
+	require.NotNil(t, cb.lastHeatingStats())
+
+	e.Seek(startTime)
+	// After seek, heating stats should be empty
+	stats := cb.lastHeatingStats()
+	assert.Empty(t, stats)
 }

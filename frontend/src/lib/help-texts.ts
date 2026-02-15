@@ -365,6 +365,32 @@ export const helpTexts: Record<string, HelpEntry> = {
 		insight: 'Battery prices have been falling. Current market ranges from 1500–3000 PLN/kWh installed.'
 	},
 
+	// ── TimeSeriesChart ──
+	chartPower: {
+		title: 'Power Chart',
+		description:
+			'Real-time power flow for selected sources. Positive values mean the home is consuming from that source; negative means energy is flowing back (e.g., battery charging or grid export).',
+		insight: 'Toggle series with the legend buttons below. The chart auto-scales to fit all visible series.'
+	},
+	chartPrice: {
+		title: 'Spot Price Chart',
+		description:
+			'Electricity spot price over time in PLN per kWh. Prices change hourly and can go negative during periods of oversupply.',
+		insight: 'Compare price valleys with battery charge times to verify the arbitrage strategy is working.'
+	},
+	chartSoC: {
+		title: 'Battery State of Charge',
+		description:
+			'Battery charge level as a percentage of effective capacity. The shaded area shows how full the battery is over time.',
+		insight: 'A healthy pattern shows daily cycles between your discharge floor and charge ceiling.'
+	},
+	chartTemp: {
+		title: 'Temperature Chart',
+		description:
+			'Outdoor temperature in degrees Celsius. When prediction mode is active, both actual and NN-predicted temperatures are shown for comparison.',
+		insight: 'Temperature strongly affects heat pump consumption — warmer weather means higher COP and lower electricity use.'
+	},
+
 	// ── PredictionComparison ──
 	nnPrediction: {
 		title: 'NN Prediction',
@@ -379,5 +405,37 @@ export const helpTexts: Record<string, HelpEntry> = {
 		formula: 'MAE = Σ |actual − predicted| ÷ number of samples',
 		example: 'MAE of 200 W means the prediction is off by 200 W on average.',
 		insight: 'MAE decreases as more training data is used. For home energy, MAE under 500 W is good.'
+	},
+
+	// ── HeatingAnalysis ──
+	heatingAnalysis: {
+		title: 'Heating Analysis',
+		description:
+			'Monthly breakdown of heat pump electricity consumption, thermal production, COP (Coefficient of Performance), cost, and average outdoor temperature.',
+		insight: 'COP varies significantly by season — expect 4+ in summer and 2–3 in winter. Lower outdoor temps reduce COP.'
+	},
+	heatingCOP: {
+		title: 'Monthly COP',
+		description:
+			'Coefficient of Performance for the heat pump in each month. Calculated as thermal production divided by electrical consumption.',
+		formula: 'COP = Production (kWh) ÷ Consumption (kWh)',
+		example: 'COP 3.5 means for every 1 kWh of electricity, the heat pump produced 3.5 kWh of heat.',
+		insight: 'Green (≥3.5) is excellent, amber (2.5–3.5) is typical for cold weather, red (<2.5) suggests very cold conditions or a problem.'
+	},
+
+	// ── AnomalyLog ──
+	anomalyLog: {
+		title: 'Consumption Anomalies',
+		description:
+			'Days where actual grid consumption deviated significantly from what the neural network predicted. Helps identify unusual consumption patterns.',
+		insight: 'Anomalies can indicate guests, equipment problems, unusual weather, or changes in routine.'
+	},
+	anomalyDeviation: {
+		title: 'Deviation %',
+		description:
+			'How much the actual grid import differed from the NN prediction, as a percentage of predicted consumption.',
+		formula: 'Deviation = (Actual − Predicted) ÷ Predicted × 100%',
+		example: '+50% means 50% more grid import than predicted. −30% means 30% less.',
+		insight: 'Red (positive) means higher-than-expected consumption. Blue (negative) means lower. Only days with >20% deviation are shown.'
 	}
 };

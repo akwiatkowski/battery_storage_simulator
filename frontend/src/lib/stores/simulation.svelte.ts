@@ -8,6 +8,8 @@ import {
 	MSG_BATTERY_SUMMARY,
 	MSG_ARBITRAGE_DAY_LOG,
 	MSG_PREDICTION_COMPARISON,
+	MSG_HEATING_STATS,
+	MSG_ANOMALY_DAYS,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
@@ -25,16 +27,26 @@ import {
 	type ArbitrageDayLogPayload,
 	type ArbitrageDayRecord,
 	type PredictionComparisonPayload,
+	type HeatingMonthStatPayload,
+	type AnomalyDayPayload,
 	type SensorInfo,
 	type Envelope
 } from '$lib/ws/messages';
 
-// Max data points to keep in the chart buffer
-const MAX_CHART_POINTS = 500;
+// Max data points to keep in the time series buffer
+const MAX_CHART_POINTS = 2500;
 
-export interface ChartPoint {
+export interface TimeSeriesPoint {
 	timestamp: Date;
-	value: number;
+	gridPowerW: number;
+	pvPowerW: number;
+	heatPumpPowerW: number;
+	batteryPowerW: number;
+	adjustedGridW: number;
+	batterySoCPct: number;
+	spotPrice: number;
+	tempActualC: number | null;
+	tempPredictedC: number | null;
 }
 
 export interface DailyRecord {
@@ -133,8 +145,9 @@ class SimulationStore {
 	predPowerErrors = $state<number[]>([]);
 	predTempErrors = $state<number[]>([]);
 
-	// Chart data
-	chartData = $state<ChartPoint[]>([]);
+	// Time series chart data
+	timeSeriesData = $state<TimeSeriesPoint[]>([]);
+	chartWindow = $state<string>('6h');
 
 	// Battery state
 	batteryEnabled = $state(false);
@@ -155,6 +168,12 @@ class SimulationStore {
 
 	// Arbitrage day log
 	arbitrageDayRecords = $state<ArbitrageDayRecord[]>([]);
+
+	// Heating month stats
+	heatingMonthStats = $state<HeatingMonthStatPayload[]>([]);
+
+	// Anomaly day records
+	anomalyDayRecords = $state<AnomalyDayPayload[]>([]);
 
 	// Daily off-grid tracking
 	dailyRecords = $state<DailyRecord[]>([]);
@@ -212,18 +231,22 @@ class SimulationStore {
 
 	seek(timestamp: string): void {
 		this.client?.send(MSG_SIM_SEEK, { timestamp });
-		this.chartData = [];
+		this.timeSeriesData = [];
 		this.dailyRecords = [];
 		this.arbitrageDayRecords = [];
+		this.heatingMonthStats = [];
+		this.anomalyDayRecords = [];
 		this.currentDayKey = '';
 	}
 
 	setDataSource(source: string): void {
 		this.dataSource = source;
 		this.client?.send(MSG_SIM_SET_SOURCE, { source });
-		this.chartData = [];
+		this.timeSeriesData = [];
 		this.dailyRecords = [];
 		this.arbitrageDayRecords = [];
+		this.heatingMonthStats = [];
+		this.anomalyDayRecords = [];
 		this.currentDayKey = '';
 	}
 
@@ -242,17 +265,21 @@ class SimulationStore {
 			charge_to_percent: this.batteryChargeToPercent,
 			degradation_cycles: this.batteryDegradationCycles
 		});
-		this.chartData = [];
+		this.timeSeriesData = [];
 		this.dailyRecords = [];
 		this.arbitrageDayRecords = [];
+		this.heatingMonthStats = [];
+		this.anomalyDayRecords = [];
 		this.currentDayKey = '';
 	}
 
 	setPredictionMode(): void {
 		this.client?.send(MSG_SIM_SET_PREDICTION, { enabled: this.predictionEnabled });
-		this.chartData = [];
+		this.timeSeriesData = [];
 		this.dailyRecords = [];
 		this.arbitrageDayRecords = [];
+		this.heatingMonthStats = [];
+		this.anomalyDayRecords = [];
 		this.currentDayKey = '';
 		this.predHasData = false;
 		this.predPowerErrors = [];
@@ -268,6 +295,26 @@ class SimulationStore {
 			distribution_fee_pln: this.distributionFeePLN,
 			net_metering_ratio: this.netMeteringRatio
 		});
+	}
+
+	setChartWindow(w: string): void {
+		this.chartWindow = w;
+	}
+
+	private appendTimeSeriesPoint(timestamp: string): void {
+		const point: TimeSeriesPoint = {
+			timestamp: new Date(timestamp),
+			gridPowerW: this.currentPower,
+			pvPowerW: this.currentPVPower,
+			heatPumpPowerW: this.currentHeatPumpPower,
+			batteryPowerW: this.batteryPowerW,
+			adjustedGridW: this.adjustedGridW,
+			batterySoCPct: this.batterySoCPercent,
+			spotPrice: this.currentSpotPrice,
+			tempActualC: this.predHasData ? this.predActualTempC : null,
+			tempPredictedC: this.predHasData ? this.predPredictedTempC : null
+		};
+		this.timeSeriesData = [...this.timeSeriesData.slice(-MAX_CHART_POINTS + 1), point];
 	}
 
 	private handleMessage(envelope: Envelope): void {
@@ -299,12 +346,11 @@ class SimulationStore {
 				this.currentPower = p.value;
 				this.currentPowerTimestamp = p.timestamp;
 
-				const point: ChartPoint = {
-					timestamp: new Date(p.timestamp),
-					value: p.value
-				};
-
-				this.chartData = [...this.chartData.slice(-MAX_CHART_POINTS + 1), point];
+				// Append time series point only when battery is disabled
+				// (when enabled, we wait for battery:update which arrives right after)
+				if (!this.batteryEnabled) {
+					this.appendTimeSeriesPoint(p.timestamp);
+				}
 				break;
 			}
 			case MSG_SUMMARY_UPDATE: {
@@ -345,6 +391,12 @@ class SimulationStore {
 				this.batteryPowerW = p.battery_power_w;
 				this.adjustedGridW = p.adjusted_grid_w;
 				this.batterySoCPercent = p.soc_percent;
+
+				// Append time series point when battery is enabled
+				// (all values are fresh: grid_power reading just arrived before this)
+				if (this.batteryEnabled) {
+					this.appendTimeSeriesPoint(p.timestamp);
+				}
 				break;
 			}
 			case MSG_BATTERY_SUMMARY: {
@@ -376,6 +428,14 @@ class SimulationStore {
 				if (p.has_actual_temp) {
 					this.predTempErrors = [...this.predTempErrors.slice(-499), Math.abs(p.actual_temp_c - p.predicted_temp_c)];
 				}
+				break;
+			}
+			case MSG_HEATING_STATS: {
+				this.heatingMonthStats = envelope.payload as HeatingMonthStatPayload[];
+				break;
+			}
+			case MSG_ANOMALY_DAYS: {
+				this.anomalyDayRecords = envelope.payload as AnomalyDayPayload[];
 				break;
 			}
 			case MSG_DATA_LOADED: {
