@@ -22,6 +22,85 @@
 		return { consumption, production, cop, cost, avgTemp };
 	});
 
+	interface Season {
+		startMonth: string;
+		endMonth: string;
+		months: number;
+		consumption: number;
+		production: number;
+		cop: number;
+		cost: number;
+		avgTemp: number;
+	}
+
+	let seasons = $derived.by((): Season[] => {
+		if (stats.length === 0) return [];
+		const threshold = 5; // kWh minimum to count as a heating month
+		const result: Season[] = [];
+		let current: { months: typeof stats; startIdx: number } | null = null;
+
+		for (let i = 0; i < stats.length; i++) {
+			const s = stats[i];
+			if (s.consumption_kwh >= threshold) {
+				if (!current) {
+					current = { months: [s], startIdx: i };
+				} else {
+					current.months.push(s);
+				}
+			} else {
+				if (current && current.months.length >= 2) {
+					result.push(buildSeason(current.months));
+				}
+				current = null;
+			}
+		}
+		if (current && current.months.length >= 2) {
+			result.push(buildSeason(current.months));
+		}
+		return result;
+	});
+
+	function buildSeason(months: typeof stats): Season {
+		let consumption = 0, production = 0, cost = 0, tempSum = 0, tempCount = 0;
+		for (const m of months) {
+			consumption += m.consumption_kwh;
+			production += m.production_kwh;
+			cost += m.cost_pln;
+			tempSum += m.avg_temp_c;
+			tempCount++;
+		}
+		return {
+			startMonth: months[0].month,
+			endMonth: months[months.length - 1].month,
+			months: months.length,
+			consumption,
+			production,
+			cop: consumption > 0 ? production / consumption : 0,
+			cost,
+			avgTemp: tempCount > 0 ? tempSum / tempCount : 0
+		};
+	}
+
+	let heatingCostFraction = $derived.by(() => {
+		const hpCost = simulation.heatPumpCostPLN;
+		const totalCost = simulation.gridImportCostPLN;
+		if (totalCost <= 0 || hpCost <= 0) return null;
+		return { hpCost, totalCost, pct: (hpCost / totalCost) * 100 };
+	});
+
+	let yoyComparison = $derived.by(() => {
+		if (seasons.length < 2) return null;
+		const prev = seasons[seasons.length - 2];
+		const curr = seasons[seasons.length - 1];
+		const costDelta = curr.cost - prev.cost;
+		const costDeltaPct = prev.cost > 0 ? (costDelta / prev.cost) * 100 : 0;
+		const consDelta = curr.consumption - prev.consumption;
+		const consDeltaPct = prev.consumption > 0 ? (consDelta / prev.consumption) * 100 : 0;
+		const copDelta = curr.cop - prev.cop;
+		const tempDelta = curr.avgTemp - prev.avgTemp;
+		return { prev, curr, costDelta, costDeltaPct, consDelta, consDeltaPct, copDelta, tempDelta };
+	});
+
 	function copClass(cop: number): string {
 		if (cop >= 3.5) return 'cop-good';
 		if (cop >= 2.5) return 'cop-ok';
@@ -32,6 +111,10 @@
 		const [year, m] = month.split('-');
 		const d = new Date(Number(year), Number(m) - 1);
 		return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+	}
+
+	function signPrefix(v: number): string {
+		return v >= 0 ? '+' : '';
 	}
 </script>
 
@@ -82,6 +165,81 @@
 						</tfoot>
 					</table>
 				</div>
+
+				{#if seasons.length > 0}
+					<div class="section-divider"></div>
+					<div class="seasons">
+						<div class="section-title">Heating Seasons</div>
+						{#each seasons as season}
+							<div class="season-row">
+								<span class="season-label">{formatMonth(season.startMonth)} → {formatMonth(season.endMonth)}</span>
+								<span class="season-detail">({season.months} months)</span>
+								<div class="season-stats mono">
+									{season.consumption.toFixed(1)} kWh consumed |
+									{season.production.toFixed(1)} kWh produced |
+									COP <span class={copClass(season.cop)}>{season.cop.toFixed(2)}</span> |
+									{season.cost.toFixed(2)} PLN |
+									Avg {season.avgTemp.toFixed(1)} °C
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+
+				{#if heatingCostFraction}
+					<div class="section-divider"></div>
+					<div class="cost-fraction">
+						<div class="section-title">Heating Cost Share</div>
+						<div class="fraction-row mono">
+							{heatingCostFraction.hpCost.toFixed(2)} PLN of {heatingCostFraction.totalCost.toFixed(2)} PLN total
+							<span class="fraction-pct">({heatingCostFraction.pct.toFixed(1)}%)</span>
+						</div>
+						<div class="fraction-bar">
+							<div class="fraction-fill" style="width: {Math.min(100, heatingCostFraction.pct)}%"></div>
+						</div>
+					</div>
+				{/if}
+
+				{#if yoyComparison}
+					<div class="section-divider"></div>
+					<div class="yoy">
+						<div class="section-title">Year-over-Year Comparison</div>
+						<div class="yoy-row">
+							<span class="yoy-label">Previous:</span>
+							<span class="mono">{formatMonth(yoyComparison.prev.startMonth)} → {formatMonth(yoyComparison.prev.endMonth)}</span>
+						</div>
+						<div class="yoy-row">
+							<span class="yoy-label">Current:</span>
+							<span class="mono">{formatMonth(yoyComparison.curr.startMonth)} → {formatMonth(yoyComparison.curr.endMonth)}</span>
+						</div>
+						<div class="yoy-deltas">
+							<div class="yoy-delta">
+								<span class="delta-label">Cost</span>
+								<span class="mono {yoyComparison.costDelta <= 0 ? 'delta-good' : 'delta-bad'}">
+									{signPrefix(yoyComparison.costDelta)}{yoyComparison.costDelta.toFixed(2)} PLN ({signPrefix(yoyComparison.costDeltaPct)}{yoyComparison.costDeltaPct.toFixed(1)}%)
+								</span>
+							</div>
+							<div class="yoy-delta">
+								<span class="delta-label">Consumption</span>
+								<span class="mono {yoyComparison.consDelta <= 0 ? 'delta-good' : 'delta-bad'}">
+									{signPrefix(yoyComparison.consDelta)}{yoyComparison.consDelta.toFixed(1)} kWh ({signPrefix(yoyComparison.consDeltaPct)}{yoyComparison.consDeltaPct.toFixed(1)}%)
+								</span>
+							</div>
+							<div class="yoy-delta">
+								<span class="delta-label">COP</span>
+								<span class="mono {yoyComparison.copDelta >= 0 ? 'delta-good' : 'delta-bad'}">
+									{signPrefix(yoyComparison.copDelta)}{yoyComparison.copDelta.toFixed(2)}
+								</span>
+							</div>
+							<div class="yoy-delta">
+								<span class="delta-label">Avg Temp</span>
+								<span class="mono">
+									{signPrefix(yoyComparison.tempDelta)}{yoyComparison.tempDelta.toFixed(1)} °C
+								</span>
+							</div>
+						</div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -199,5 +357,111 @@
 		border-top: 2px solid #e8ecf1;
 		border-bottom: none;
 		padding-top: 8px;
+	}
+
+	.section-divider {
+		border-top: 1px solid #eef2f6;
+		margin: 12px 0;
+	}
+
+	.section-title {
+		font-size: 12px;
+		font-weight: 600;
+		color: #64748b;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-bottom: 8px;
+	}
+
+	.season-row {
+		margin-bottom: 8px;
+	}
+
+	.season-label {
+		font-weight: 600;
+		font-size: 13px;
+		color: #334155;
+	}
+
+	.season-detail {
+		font-size: 12px;
+		color: #94a3b8;
+		margin-left: 4px;
+	}
+
+	.season-stats {
+		color: #64748b;
+		margin-top: 2px;
+		line-height: 1.5;
+	}
+
+	.cost-fraction {
+		margin-bottom: 4px;
+	}
+
+	.fraction-row {
+		color: #334155;
+		margin-bottom: 6px;
+	}
+
+	.fraction-pct {
+		font-weight: 600;
+		color: #e8884c;
+	}
+
+	.fraction-bar {
+		height: 6px;
+		background: #eef2f6;
+		border-radius: 3px;
+		overflow: hidden;
+	}
+
+	.fraction-fill {
+		height: 100%;
+		background: #e8884c;
+		border-radius: 3px;
+		transition: width 0.3s;
+	}
+
+	.yoy-row {
+		font-size: 13px;
+		margin-bottom: 4px;
+		color: #334155;
+	}
+
+	.yoy-label {
+		font-weight: 600;
+		color: #64748b;
+		display: inline-block;
+		width: 70px;
+	}
+
+	.yoy-deltas {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px 16px;
+		margin-top: 8px;
+	}
+
+	.yoy-delta {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.delta-label {
+		font-size: 11px;
+		font-weight: 600;
+		color: #94a3b8;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	:global(.delta-good) {
+		color: #5bb88a;
+	}
+
+	:global(.delta-bad) {
+		color: #e87c6c;
 	}
 </style>

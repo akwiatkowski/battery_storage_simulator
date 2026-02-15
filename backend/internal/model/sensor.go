@@ -26,6 +26,7 @@ const (
 	SensorNetwork            SensorType = "network"
 	SensorExternal           SensorType = "external"
 	SensorEnergyPrice        SensorType = "energy_price"
+	SensorGridVoltage        SensorType = "grid_voltage"
 )
 
 // SensorHomeAssistantID maps our sensor slugs to Home Assistant entity IDs.
@@ -51,6 +52,7 @@ var SensorHomeAssistantID = map[SensorType]string{
 	SensorNetwork:         "sensor.siec_z2m_power",
 	SensorExternal:        "sensor.moc_do_arka",
 	SensorEnergyPrice:     "sensor.spotprice_now",
+	SensorGridVoltage:     "sensor.0x943469fffed2bf71_voltage",
 }
 
 // HAEntityToSensorType is the reverse of SensorHomeAssistantID.
@@ -92,6 +94,7 @@ var SensorCatalog = map[SensorType]SensorInfo{
 	SensorNetwork:         {Name: "Network", Unit: "W"},
 	SensorExternal:        {Name: "External Power", Unit: "W"},
 	SensorEnergyPrice:     {Name: "Energy Price", Unit: "PLN/kWh"},
+	SensorGridVoltage:     {Name: "Grid Voltage", Unit: "V"},
 }
 
 type Reading struct {

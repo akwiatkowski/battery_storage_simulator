@@ -2,9 +2,9 @@
 MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
 export PATH := $(MISE_PATHS)$(PATH)
 
-.PHONY: run-backend build-backend build-battery-compare build-train-predictor build-sample-predict build-fetch-prices build-load-analysis build-ha-fetch-history test-backend test-backend-v lint-backend \
+.PHONY: run-backend build-backend build-battery-compare build-train-predictor build-sample-predict build-fetch-prices build-load-analysis build-ha-fetch-history build-anomaly-detect build-voltage-analysis test-backend test-backend-v lint-backend \
        install-frontend dev-frontend build-frontend test-frontend lint-frontend \
-       dev test lint build clean compare train sample-predict fetch-prices load-analysis ha-fetch-history \
+       dev test lint build clean compare train sample-predict fetch-prices load-analysis ha-fetch-history anomaly-detect voltage-analysis \
        docker-build docker-up docker-down \
        sql-stats
 
@@ -53,6 +53,18 @@ build-ha-fetch-history:
 
 ha-fetch-history: build-ha-fetch-history
 	./bin/ha-fetch-history
+
+build-anomaly-detect:
+	cd backend && go build -o ../bin/anomaly-detect ./cmd/anomaly-detect
+
+anomaly-detect: build-anomaly-detect
+	./bin/anomaly-detect -input-dir input -temp-model model/temperature.json -power-model model/grid_power.json
+
+build-voltage-analysis:
+	cd backend && go build -o ../bin/voltage-analysis ./cmd/voltage-analysis
+
+voltage-analysis: build-voltage-analysis
+	./bin/voltage-analysis -input-dir input
 
 test-backend:
 	cd backend && go test ./...

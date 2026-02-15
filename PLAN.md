@@ -111,46 +111,38 @@ UI section similar to BatteryConfig:
 - Dashboard section with load shifting recommendations
 - Appliance timing heatmap (hour vs day-of-week colored by cost)
 
-## 9. Consumption Anomaly Detection
+## ~~9. Consumption Anomaly Detection~~ (DONE)
 
-CLI tool + collapsed dashboard section. Use the NN prediction as a baseline and flag days where actual consumption deviates significantly.
+**Implemented:**
+- CLI tool `cmd/anomaly-detect/` loads CSV data + trained NN models, computes daily actual vs predicted grid import
+- Flags statistical outliers using configurable sigma threshold (default 2.0)
+- Categorizes anomalies as HIGH (above-normal) or LOW (below-normal) consumption
+- Correlates with temperature deviation (unexpected cold → extra heating)
+- Dashboard section already existed (collapsed anomaly days list)
+- Makefile target: `make anomaly-detect`
 
-### CLI Tool (`cmd/anomaly-detect/`)
+## ~~10. Seasonal Heating Cost Analysis~~ (DONE)
 
-- Compare actual grid power readings against NN-predicted values (already available via PredictedPowerAt)
-- Compute daily residuals: `actual_daily_kWh - predicted_daily_kWh`
-- Flag days where residual exceeds 2× standard deviation
-- Categorize: high consumption anomaly (guests? broken appliance?) vs low (away from home?)
-- Correlate with temperature anomalies (unexpected heating demand?)
+**Implemented:**
+- HeatingAnalysis dashboard component enhanced with three new sections:
+- **Heating season detection**: groups consecutive months with consumption ≥ 5 kWh into seasons, displays date range, duration, consumption, production, COP, cost, avg temp
+- **Heating cost fraction**: shows heat pump cost as % of total electricity cost with visual bar
+- **Year-over-year comparison**: when ≥2 seasons detected, compares cost, consumption, COP, and avg temp changes with color-coded deltas
+- Monthly COP analysis by month already existed in the table view
 
-### Dashboard Section (collapsed)
+## ~~11. Voltage & PV Curtailment Analysis~~ (DONE)
 
-- List of anomaly days with date, actual vs predicted, deviation %
-- Possible cause hints based on which sensors showed unusual patterns
-
-## 10. Seasonal Heating Cost Analysis
-
-Analyze heating costs and season duration from real heat pump data.
-
-- **Heating season detection**: find contiguous periods where daily heat pump consumption exceeds a threshold (e.g. >5 kWh/day)
-- **Per-season stats**: start/end dates, duration (days), total heat pump consumption (kWh), total heating cost (PLN), avg outdoor temp
-- **Cost breakdown**: electricity cost of heating vs total electricity cost — what fraction of the bill is heating?
-- **COP analysis by month**: actual COP from production/consumption ratio, correlated with outdoor temp
-- **Year-over-year comparison**: if multiple seasons in data, compare heating costs and degree-days
-- Display in a dedicated section or as part of EnergySummary when heat pump data exists
-
-## 11. Voltage & PV Curtailment Analysis
-
-Ingest additional sensor data — per-phase voltage (L1/L2/L3) and grid voltage — and build a CLI tool that correlates PV power output, spot price, and voltage levels to identify curtailment patterns.
-
-- **New sensors**: phase voltages (V), grid voltage (V) from HA or smart meter
-- **CLI tool** (`cmd/voltage-analysis/`): reads CSV/store data, outputs pattern report
-- **Analysis**:
-  - Detect PV curtailment: periods where PV output drops while irradiance should be high (midday), correlated with high grid voltage (>253V)
-  - Revenue loss: estimate lost export revenue from curtailment using spot price at those timestamps
-  - Phase imbalance: identify asymmetric load/export across phases
-  - Voltage vs export scatter plot data: export power (W) vs grid voltage (V) to find the inverter's voltage trip point
-- **Output**: summary stats (curtailment hours, lost kWh, lost PLN) + CSV export for external plotting
+**Implemented:**
+- `SensorGridVoltage` added to model with HA entity ID mapping (auto-discovered by ha-fetch-history)
+- CLI tool `cmd/voltage-analysis/` with flags: `-input-dir`, `-voltage-threshold`, `-min-pv`, `-pv-drop-pct`, `-peak-window`, `-csv-out`, `-daylight-start`, `-daylight-end`
+- Export summary: total export kWh, max export power, export revenue
+- Voltage summary: avg/max voltage, avg voltage during export
+- Curtailment detection: rolling PV peak tracking, flags intervals where voltage > threshold AND PV drops significantly
+- Estimates lost energy (kWh) and lost revenue (PLN) from curtailment events
+- Optional scatter CSV export (voltage, export_W, pv_W) for external plotting
+- Graceful fallback when voltage sensor not yet available
+- No phase imbalance analysis (single voltage sensor available)
+- Makefile targets: `make voltage-analysis`
 
 ## 12. Per-Appliance Cost Efficiency
 
@@ -175,23 +167,11 @@ Display as a comparison table showing net cost under each tariff model for the s
 
 Partially superseded by #4 (Net Metering & Net Billing) which covers the most important Polish tariff variants.
 
-## 14. Value Explanation Modals
+## ~~14. Value Explanation Modals~~ (DONE)
 
-Every numeric value displayed on the dashboard should have a small "?" button next to it. Clicking it opens a modal with a plain-language explanation of what the value means and how it's calculated. The goal is to make the dashboard understandable to someone with zero energy/technical background.
-
-### Requirements
-
-- **"?" icon button** next to each value label (small, unobtrusive, consistent with current help-icon style)
-- **Modal overlay** appears on click with:
-  - **Title**: the value name (e.g. "Self-Consumption")
-  - **What it means**: 1-2 sentence plain-language explanation
-  - **How it's calculated**: simple formula or description (e.g. "PV production that was used directly by the home instead of exported to the grid")
-  - **Example**: concrete numeric example if helpful (e.g. "If your PV produced 10 kWh and you used 7 kWh directly, self-consumption = 7 kWh (70%)")
-  - **Why it matters**: brief practical insight (e.g. "Higher self-consumption means less reliance on expensive grid electricity")
-- **Close** via X button, clicking outside, or Escape key
-- **Reusable component**: `HelpModal.svelte` with props for title, description, formula, example
-- **Content**: define all explanations in a single data file (`$lib/help-texts.ts`) for easy editing
-
-### Values to cover
-
-All values in EnergySummary, CostSummary, BatteryStats, BatteryConfig fields, SimConfig fields, and PredictionComparison. Approximately 30-40 distinct explanations.
+**Implemented:**
+- HelpTip component with "?" icon buttons next to value labels
+- HelpModal overlay with title, description, formula, example, and "why it matters" sections
+- 58 help entries defined in `$lib/help-texts.ts` covering all dashboard values
+- 78 HelpTip instances across EnergySummary, CostSummary, BatteryStats, BatteryConfig, SimConfig, PredictionComparison, HeatingAnalysis, and more
+- Close via X button, click outside, or Escape key
