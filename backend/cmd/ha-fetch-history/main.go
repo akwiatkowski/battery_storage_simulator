@@ -29,7 +29,6 @@ type record struct {
 func main() {
 	urlFlag := flag.String("url", "", "Home Assistant base URL (overrides HA_URL)")
 	tokenFlag := flag.String("token", "", "Long-lived access token (overrides HA_TOKEN)")
-	days := flag.Int("days", 7, "Days to fetch on first run (ignored if output file has data)")
 	output := flag.String("output", "input/recent/ha-fetch.csv", "Output CSV path")
 	flag.Parse()
 
@@ -50,39 +49,43 @@ func main() {
 		log.Fatal("no entity IDs found in model.SensorHomeAssistantID")
 	}
 
-	existing, latestTS := loadExistingRecords(*output)
-
-	var startTime time.Time
-	if latestTS > 0 {
-		startTime = time.Unix(int64(latestTS), 0).Add(-1 * time.Minute)
-		log.Printf("resuming from %s (latest timestamp minus 1min overlap)", startTime.Format(time.RFC3339))
-	} else {
-		startTime = time.Now().AddDate(0, 0, -*days)
-		log.Printf("first run — fetching last %d days from %s", *days, startTime.Format(time.RFC3339))
-	}
+	existing, earliestTS, latestTS := loadExistingRecords(*output)
 
 	endTime := time.Now()
 	client := &http.Client{Timeout: 30 * time.Second}
 	entityIDStr := strings.Join(entityIDs, ",")
 
 	var newRecords []record
-	for start := startTime; start.Before(endTime); start = start.Add(24 * time.Hour) {
-		end := start.Add(24 * time.Hour)
-		if end.After(endTime) {
-			end = endTime
-		}
 
-		dayRecords, err := fetchDay(client, haURL, haToken, start, end, entityIDStr)
-		if err != nil {
-			log.Fatalf("fetching %s: %v", start.Format("2006-01-02"), err)
-		}
-		newRecords = append(newRecords, dayRecords...)
-		log.Printf("  %s: %d records", start.Format("2006-01-02"), len(dayRecords))
-
-		if end.Before(endTime) {
-			time.Sleep(500 * time.Millisecond)
+	// Backfill: fetch data before the earliest existing record
+	backfillStart := endTime.AddDate(-2, 0, 0) // 2 years back — HA returns empty for missing periods
+	if earliestTS > 0 {
+		backfillEnd := time.Unix(int64(earliestTS), 0).Add(1 * time.Minute)
+		if backfillStart.Before(backfillEnd) {
+			log.Printf("backfilling from %s to %s", backfillStart.Format("2006-01-02"), backfillEnd.Format("2006-01-02"))
+			backfill, err := fetchRange(client, haURL, haToken, backfillStart, backfillEnd, entityIDStr)
+			if err != nil {
+				log.Fatalf("backfill: %v", err)
+			}
+			newRecords = append(newRecords, backfill...)
 		}
 	}
+
+	// Forward: fetch new data from latest timestamp onward (or from 2 years ago on first run)
+	var startTime time.Time
+	if latestTS > 0 {
+		startTime = time.Unix(int64(latestTS), 0).Add(-1 * time.Minute)
+		log.Printf("fetching new data from %s", startTime.Format(time.RFC3339))
+	} else {
+		startTime = backfillStart
+		log.Printf("first run — fetching all available data from %s", startTime.Format("2006-01-02"))
+	}
+
+	forward, err := fetchRange(client, haURL, haToken, startTime, endTime, entityIDStr)
+	if err != nil {
+		log.Fatalf("fetch: %v", err)
+	}
+	newRecords = append(newRecords, forward...)
 
 	merged := mergeRecords(existing, newRecords)
 
@@ -138,21 +141,18 @@ func collectEntityIDs() []string {
 	return ids
 }
 
-func loadExistingRecords(path string) ([]record, float64) {
+func loadExistingRecords(path string) (records []record, earliestTS, latestTS float64) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0
+		return nil, 0, 0
 	}
 	defer f.Close()
 
 	cr := csv.NewReader(f)
 	// skip header
 	if _, err := cr.Read(); err != nil {
-		return nil, 0
+		return nil, 0, 0
 	}
-
-	var records []record
-	var maxTS float64
 
 	for {
 		row, err := cr.Read()
@@ -180,19 +180,48 @@ func loadExistingRecords(path string) ([]record, float64) {
 			value:    value,
 			ts:       ts,
 		})
-		if ts > maxTS {
-			maxTS = ts
+		if ts > latestTS {
+			latestTS = ts
+		}
+		if earliestTS == 0 || ts < earliestTS {
+			earliestTS = ts
 		}
 	}
 
-	return records, maxTS
+	return records, earliestTS, latestTS
+}
+
+func fetchRange(client *http.Client, baseURL, token string, start, end time.Time, entityIDs string) ([]record, error) {
+	var allRecords []record
+	for day := start; day.Before(end); day = day.Add(24 * time.Hour) {
+		dayEnd := day.Add(24 * time.Hour)
+		if dayEnd.After(end) {
+			dayEnd = end
+		}
+
+		dayRecords, err := fetchDay(client, baseURL, token, day, dayEnd, entityIDs)
+		if err != nil {
+			return nil, fmt.Errorf("fetching %s: %w", day.Format("2006-01-02"), err)
+		}
+		allRecords = append(allRecords, dayRecords...)
+
+		if len(dayRecords) > 0 {
+			log.Printf("  %s: %d records", day.Format("2006-01-02"), len(dayRecords))
+		}
+
+		// Only sleep between requests that returned data to speed up backfill over empty periods
+		if len(dayRecords) > 0 && dayEnd.Before(end) {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	return allRecords, nil
 }
 
 func fetchDay(client *http.Client, baseURL, token string, start, end time.Time, entityIDs string) ([]record, error) {
 	url := fmt.Sprintf("%s/api/history/period/%s?end_time=%s&filter_entity_id=%s&minimal_response&no_attributes",
 		baseURL,
-		start.Format(time.RFC3339),
-		end.Format(time.RFC3339),
+		start.UTC().Format(time.RFC3339),
+		end.UTC().Format(time.RFC3339),
 		entityIDs,
 	)
 

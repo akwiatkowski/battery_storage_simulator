@@ -219,17 +219,19 @@ func TestLoadExistingRecords(t *testing.T) {
 	w.Flush()
 	f.Close()
 
-	records, maxTS := loadExistingRecords(csvPath)
+	records, minTS, maxTS := loadExistingRecords(csvPath)
 
 	assert.Len(t, records, 3)
+	assert.Equal(t, 1000.0, minTS)
 	assert.Equal(t, 2000.0, maxTS)
 	assert.Equal(t, "sensor.a", records[0].sensorID)
 	assert.Equal(t, 100.0, records[0].value)
 }
 
 func TestLoadExistingRecordsMissing(t *testing.T) {
-	records, maxTS := loadExistingRecords("/nonexistent/path.csv")
+	records, minTS, maxTS := loadExistingRecords("/nonexistent/path.csv")
 	assert.Nil(t, records)
+	assert.Equal(t, 0.0, minTS)
 	assert.Equal(t, 0.0, maxTS)
 }
 
