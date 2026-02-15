@@ -14,6 +14,8 @@
 	import PredictionComparison from '$lib/components/PredictionComparison.svelte';
 	import TimeSeriesChart from '$lib/components/TimeSeriesChart.svelte';
 	import HeatingAnalysis from '$lib/components/HeatingAnalysis.svelte';
+	import LoadShiftAnalysis from '$lib/components/LoadShiftAnalysis.svelte';
+	import PVConfig from '$lib/components/PVConfig.svelte';
 	import AnomalyLog from '$lib/components/AnomalyLog.svelte';
 
 	onMount(() => {
@@ -85,6 +87,7 @@
 		<div class="left-col">
 			<BatteryConfig />
 			<SimConfig />
+			<PVConfig />
 		</div>
 		<div class="right-col">
 			<BatteryStats />
@@ -94,6 +97,7 @@
 
 	<PredictionComparison />
 	<HeatingAnalysis />
+	<LoadShiftAnalysis />
 	<AnomalyLog />
 	<OffGridHeatmap />
 	<ArbitrageLog />

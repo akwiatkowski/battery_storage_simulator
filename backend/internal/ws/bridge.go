@@ -119,3 +119,12 @@ func (b *Bridge) OnAnomalyDays(records []simulator.AnomalyDayRecord) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnLoadShiftStats(stats simulator.LoadShiftStats) {
+	msg, err := NewEnvelope(TypeLoadShiftStats, LoadShiftStatsFromEngine(stats))
+	if err != nil {
+		log.Printf("Error marshaling load shift stats: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

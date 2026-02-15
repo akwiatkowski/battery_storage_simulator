@@ -32,6 +32,7 @@ func (c *collector) OnArbitrageDayLog([]simulator.ArbitrageDayRecord)       {}
 func (c *collector) OnPredictionComparison(simulator.PredictionComparison) {}
 func (c *collector) OnHeatingStats([]simulator.HeatingMonthStat)           {}
 func (c *collector) OnAnomalyDays([]simulator.AnomalyDayRecord)            {}
+func (c *collector) OnLoadShiftStats(simulator.LoadShiftStats)             {}
 
 type result struct {
 	capacity float64

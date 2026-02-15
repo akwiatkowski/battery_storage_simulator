@@ -80,7 +80,9 @@ describe('Message payload types', () => {
 			nm_credit_bank_kwh: 12.5,
 			nb_net_cost_pln: 60.0,
 			nb_deposit_pln: 8.3,
-			heat_pump_cost_pln: 130.0
+			heat_pump_cost_pln: 130.0,
+			pre_heat_cost_pln: 110.0,
+			pre_heat_savings_pln: 20.0
 		};
 		expect(payload.today_kwh).toBe(12.3);
 	});

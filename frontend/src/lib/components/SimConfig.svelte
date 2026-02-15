@@ -42,6 +42,12 @@
 		const target = e.target as HTMLInputElement;
 		simulation.batteryCostPerKWh = Number(target.value);
 	}
+
+	function handleInsulationChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		simulation.insulationLevel = target.value;
+		simulation.sendConfig();
+	}
 </script>
 
 <div class="config-panel">
@@ -116,8 +122,8 @@
 			/>
 		</label>
 	</div>
-	{#if simulation.batteryEnabled}
-		<div class="config-row" style="margin-top: 12px;">
+	<div class="config-row" style="margin-top: 12px;">
+		{#if simulation.batteryEnabled}
 			<label class="config-item">
 				<span class="config-label">Battery Cost <HelpTip key="batteryCost" /></span>
 				<input
@@ -129,8 +135,17 @@
 					onchange={handleBatteryCostChange}
 				/>
 			</label>
-		</div>
-	{/if}
+		{/if}
+		<label class="config-item">
+			<span class="config-label">Insulation Level</span>
+			<select value={simulation.insulationLevel} onchange={handleInsulationChange}>
+				<option value="very_good">Very Good (EP&lt;60)</option>
+				<option value="good">Good (EP 60-90)</option>
+				<option value="normal">Normal (EP 90-120)</option>
+				<option value="basic">Basic (EP&gt;120)</option>
+			</select>
+		</label>
+	</div>
 </div>
 
 <style>
@@ -170,7 +185,8 @@
 		letter-spacing: 0.5px;
 	}
 
-	input[type='number'] {
+	input[type='number'],
+	select {
 		background: #f8fafc;
 		color: #222;
 		border: 1px solid #d1d5db;

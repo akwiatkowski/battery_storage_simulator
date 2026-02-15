@@ -33,7 +33,8 @@ docker compose up # production build
 - `backend/internal/model/` — domain types (Reading, Sensor, SensorType)
 - `backend/internal/ingest/` — CSV parsing (Home Assistant format)
 - `backend/internal/store/` — in-memory data store
-- `backend/internal/simulator/` — time-based replay engine
+- `backend/internal/simulator/` — time-based replay engine, thermal model, battery
+- `backend/internal/solar/` — PV profile engine (data-derived hourly profiles, orientation shifting)
 - `backend/internal/predictor/` — neural network engine, temperature + grid power predictors
 - `backend/internal/ws/` — WebSocket hub, handler, message types
 - `frontend/src/lib/ws/` — WebSocket client + message types
@@ -51,11 +52,15 @@ docker compose up # production build
 - `CostSummary.svelte` — energy costs, battery strategy comparison (self-consumption vs arbitrage vs net metering vs net billing), ROI
 - `BatteryConfig.svelte` — battery parameter controls (capacity, power, SoC limits, degradation)
 - `BatteryStats.svelte` — battery cycle count, degradation %, power distribution histograms
-- `SimConfig.svelte` — simulation parameters (export coefficient, tariffs, temp offset, battery cost)
+- `SimConfig.svelte` — simulation parameters (export coefficient, tariffs, temp offset, battery cost, insulation level)
 - `SimControls.svelte` — play/pause, speed, data source, seek, NN prediction toggle, price badge
 - `SoCHeatmap.svelte` — monthly SoC distribution heatmap (teal gradient)
 - `OffGridHeatmap.svelte` — daily battery autonomy heatmap (GitHub calendar style, amber→blue)
 - `PredictionComparison.svelte` — NN predicted vs actual power/temperature with MAE
+- `HeatingAnalysis.svelte` — monthly COP table, heating seasons, cost fraction, YoY comparison, pre-heating potential
+- `LoadShiftAnalysis.svelte` — HP timing efficiency, shift potential, day-of-week × hour price heatmap
+- `PVConfig.svelte` — custom PV array configuration (East/South/West, peak power, azimuth, tilt)
+- `AnomalyLog.svelte` — consumption anomaly detection log
 - `ArbitrageLog.svelte` — collapsible daily arbitrage log with monthly navigation
 - `ExportButton.svelte` — exports full HTML report (energy summary, costs, arbitrage log, daily records)
 
@@ -102,6 +107,7 @@ Price thresholds use daily P33/P67 percentiles of spot prices (cached per calend
 - **Heat pump cost**: heat pump consumption × spot price, tracked separately
 - **Net metering**: credit bank (kWh) with configurable ratio, distribution fee
 - **Net billing**: PLN deposit from export at spot, import at fixed tariff
+- **Pre-heating**: shadow thermal model compares actual HP cost vs optimal pre-heat/coast strategy
 - **Battery savings**: difference between no-battery and with-battery net cost (both self-consumption and arbitrage)
 - **ROI**: investment = capacity × cost/kWh, annual savings extrapolated, simple payback years
 

@@ -14,6 +14,7 @@ export const MSG_SIM_SET_SOURCE = 'sim:set_source';
 export const MSG_BATTERY_CONFIG = 'battery:config';
 export const MSG_SIM_SET_PREDICTION = 'sim:set_prediction';
 export const MSG_CONFIG_UPDATE = 'config:update';
+export const MSG_PV_CONFIG = 'pv:config';
 
 // Server -> Client
 export const MSG_SIM_STATE = 'sim:state';
@@ -26,6 +27,7 @@ export const MSG_ARBITRAGE_DAY_LOG = 'arbitrage:day_log';
 export const MSG_PREDICTION_COMPARISON = 'prediction:comparison';
 export const MSG_HEATING_STATS = 'heating:stats';
 export const MSG_ANOMALY_DAYS = 'anomaly:days';
+export const MSG_LOAD_SHIFT_STATS = 'load_shift:stats';
 
 export interface SetSpeedPayload {
 	speed: number;
@@ -85,6 +87,14 @@ export interface SummaryPayload {
 	nm_credit_bank_kwh: number;
 	nb_net_cost_pln: number;
 	nb_deposit_pln: number;
+	pre_heat_cost_pln: number;
+	pre_heat_savings_pln: number;
+	pv_array_production?: PVArrayProdPayload[];
+}
+
+export interface PVArrayProdPayload {
+	name: string;
+	kwh: number;
 }
 
 export interface SensorInfo {
@@ -156,6 +166,20 @@ export interface ConfigUpdatePayload {
 	fixed_tariff_pln: number;
 	distribution_fee_pln: number;
 	net_metering_ratio: number;
+	insulation_level?: string;
+}
+
+export interface PVConfigPayload {
+	enabled: boolean;
+	arrays: PVArrayConfigPayload[];
+}
+
+export interface PVArrayConfigPayload {
+	name: string;
+	peak_wp: number;
+	azimuth: number;
+	tilt: number;
+	enabled: boolean;
 }
 
 export interface PredictionComparisonPayload {
@@ -181,4 +205,21 @@ export interface AnomalyDayPayload {
 	predicted_kwh: number;
 	deviation_pct: number;
 	avg_temp_c: number;
+}
+
+// Load shift stats
+
+export interface LoadShiftHeatmapCell {
+	kwh: number;
+	avg_price: number;
+}
+
+export interface LoadShiftStatsPayload {
+	heatmap: LoadShiftHeatmapCell[][];
+	avg_hp_price: number;
+	overall_avg_price: number;
+	shift_current_pln: number;
+	shift_optimal_pln: number;
+	shift_savings_pln: number;
+	shift_window_h: number;
 }

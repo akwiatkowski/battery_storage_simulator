@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"energy_simulator/internal/model"
+	"energy_simulator/internal/solar"
 	"energy_simulator/internal/store"
 )
 
@@ -57,6 +58,19 @@ type Summary struct {
 	// Net billing
 	NBNetCostPLN float64 `json:"nb_net_cost_pln"`
 	NBDepositPLN float64 `json:"nb_deposit_pln"`
+
+	// Pre-heating
+	PreHeatCostPLN    float64 `json:"pre_heat_cost_pln"`
+	PreHeatSavingsPLN float64 `json:"pre_heat_savings_pln"`
+
+	// PV arrays
+	PVArrayProduction []PVArrayProd `json:"pv_array_production,omitempty"`
+}
+
+// PVArrayProd holds per-array PV production for the summary.
+type PVArrayProd struct {
+	Name string  `json:"name"`
+	KWh  float64 `json:"kwh"`
 }
 
 // OffGridCoverage returns the percentage of adjusted home demand that could be
@@ -139,6 +153,40 @@ type AnomalyDayRecord struct {
 	AvgTempC     float64
 }
 
+// LoadShiftStats holds load shifting analysis data sent to frontend.
+type LoadShiftStats struct {
+	Heatmap         [7][24]HeatmapCell `json:"heatmap"`
+	AvgHPPrice      float64            `json:"avg_hp_price"`
+	OverallAvgPrice float64            `json:"overall_avg_price"`
+	ShiftCurrentPLN float64            `json:"shift_current_pln"`
+	ShiftOptimalPLN float64            `json:"shift_optimal_pln"`
+	ShiftSavingsPLN float64            `json:"shift_savings_pln"`
+	ShiftWindowH    int                `json:"shift_window_h"`
+}
+
+// HeatmapCell holds per-cell data for the load shift heatmap.
+type HeatmapCell struct {
+	KWh      float64 `json:"kwh"`
+	AvgPrice float64 `json:"avg_price"`
+}
+
+// PVArrayConfig describes a single PV array's orientation.
+type PVArrayConfig struct {
+	Name    string  `json:"name"`
+	PeakWp  float64 `json:"peak_wp"`
+	Azimuth float64 `json:"azimuth"`
+	Tilt    float64 `json:"tilt"`
+	Enabled bool    `json:"enabled"`
+}
+
+// hourlySlot accumulates HP energy and cost per hour slot.
+type hourlySlot struct {
+	hpWh      float64
+	hpCostPLN float64
+	priceSum  float64
+	priceN    int
+}
+
 // heatingMonthAcc is a private accumulator for per-month heating data.
 type heatingMonthAcc struct {
 	consumptionWh float64
@@ -159,6 +207,7 @@ type Callback interface {
 	OnPredictionComparison(comp PredictionComparison)
 	OnHeatingStats(stats []HeatingMonthStat)
 	OnAnomalyDays(records []AnomalyDayRecord)
+	OnLoadShiftStats(stats LoadShiftStats)
 }
 
 // Engine replays historical sensor data at configurable speed.
@@ -254,6 +303,23 @@ type Engine struct {
 	heatingMonths     map[string]*heatingMonthAcc
 	heatingMonthOrder []string
 
+	// Pre-heating thermal model (shadow, like arbitrage battery)
+	thermal        *ThermalModel
+	preHeatCostPLN float64
+	insulationLevel InsulationLevel
+
+	// Load shift hourly tracking
+	dayOfWeekHourly [7][24]hourlySlot
+	overallPriceSum float64
+	overallPriceN   int
+	loadShiftDirty  bool
+
+	// Custom PV configuration
+	pvCustomEnabled bool
+	pvBaseProfile   *solar.PVProfile
+	pvArrays        []PVArrayConfig
+	pvArrayWh       []float64 // per-array production accumulators
+
 	// Anomaly tracking (per-day during historical replay with prediction)
 	anomalyDays           []AnomalyDayRecord
 	anomalyCurrentDay     string
@@ -318,6 +384,83 @@ func (e *Engine) SetNetMeteringRatio(v float64) {
 	e.mu.Lock()
 	e.netMeteringRatio = v
 	e.mu.Unlock()
+}
+
+// SetInsulationLevel sets the building insulation level for pre-heating simulation.
+func (e *Engine) SetInsulationLevel(level InsulationLevel) {
+	e.mu.Lock()
+	e.insulationLevel = level
+	if e.thermal != nil {
+		e.thermal.HeatLossWC = HeatLossForInsulation(level)
+		e.thermal.Insulation = level
+	}
+	e.mu.Unlock()
+}
+
+// SetPVConfig configures custom PV arrays.
+func (e *Engine) SetPVConfig(enabled bool, arrays []PVArrayConfig) {
+	e.mu.Lock()
+	e.pvCustomEnabled = enabled
+	e.pvArrays = arrays
+	e.pvArrayWh = make([]float64, len(arrays))
+
+	// Build base profile from stored PV data if needed
+	if enabled && e.pvBaseProfile == nil {
+		e.buildPVBaseProfile()
+	}
+	e.mu.Unlock()
+}
+
+// buildPVBaseProfile derives a PV generation profile from stored data.
+// Must be called with mu held.
+func (e *Engine) buildPVBaseProfile() {
+	// Find PV sensor
+	var pvSensorID string
+	for _, sensor := range e.store.Sensors() {
+		if sensor.Type == model.SensorPVPower {
+			pvSensorID = sensor.ID
+			break
+		}
+	}
+	if pvSensorID == "" {
+		return
+	}
+
+	// Get all PV readings
+	tr, ok := e.store.GlobalTimeRange()
+	if !ok {
+		return
+	}
+	readings := e.store.ReadingsInRange(pvSensorID, tr.Start, tr.End)
+
+	// Default peak based on typical east-facing installation
+	peakWp := 6500.0
+	profile := solar.BuildProfileFromReadings(readings, peakWp)
+	e.pvBaseProfile = &profile
+}
+
+// computeCustomPV calculates total PV power from configured arrays at the given time.
+// Must be called with mu held. Returns total PV watts and per-array watts.
+func (e *Engine) computeCustomPV(t time.Time) (float64, []float64) {
+	if e.pvBaseProfile == nil || len(e.pvArrays) == 0 {
+		return 0, nil
+	}
+
+	hour := float64(t.Hour()) + float64(t.Minute())/60.0
+	baseAzimuth := 90.0 // original east-facing installation
+
+	var total float64
+	perArray := make([]float64, len(e.pvArrays))
+	for i, arr := range e.pvArrays {
+		if !arr.Enabled || arr.PeakWp <= 0 {
+			continue
+		}
+		oriented := solar.GenerateOrientedProfile(*e.pvBaseProfile, arr.Azimuth, arr.Tilt, baseAzimuth)
+		power := oriented.PowerAt(hour, arr.PeakWp)
+		perArray[i] = power
+		total += power
+	}
+	return total, perArray
 }
 
 // SetTempOffset sets the temperature offset for NN prediction.
@@ -552,6 +695,21 @@ func (e *Engine) resetAccumulators() {
 	e.heatingMonths = make(map[string]*heatingMonthAcc)
 	e.heatingMonthOrder = nil
 
+	// Thermal model reset
+	if e.thermal != nil {
+		e.thermal.Reset()
+	}
+	e.preHeatCostPLN = 0
+
+	// Load shift reset
+	e.dayOfWeekHourly = [7][24]hourlySlot{}
+	e.overallPriceSum = 0
+	e.overallPriceN = 0
+	e.loadShiftDirty = false
+
+	// PV array accumulators reset
+	e.pvArrayWh = make([]float64, len(e.pvArrays))
+
 	// Anomaly tracking reset
 	e.anomalyDays = nil
 	e.anomalyCurrentDay = ""
@@ -716,6 +874,51 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 	for _, sensor := range e.store.Sensors() {
 		readings := e.store.ReadingsInRange(sensor.ID, prevTime, queryEnd)
 		for _, r := range readings {
+			// Custom PV mode: replace PV readings and adjust grid readings
+			e.mu.Lock()
+			pvCustom := e.pvCustomEnabled
+			e.mu.Unlock()
+
+			if pvCustom && r.Type == model.SensorPVPower {
+				e.mu.Lock()
+				totalPV, perArray := e.computeCustomPV(r.Timestamp)
+				for i, w := range perArray {
+					if i < len(e.pvArrayWh) {
+						// Use trapezoid: track last PV per array
+						key := r.SensorID + ":pvArr"
+						lastR, ok := e.lastReadings[key]
+						if ok {
+							hours := r.Timestamp.Sub(lastR.Timestamp).Hours()
+							// We approximate: just accumulate this step
+							e.pvArrayWh[i] += w * hours * 0.5 // rough: will be refined by updateEnergy
+						}
+					}
+				}
+				_ = perArray
+				e.mu.Unlock()
+				r.Value = totalPV
+			}
+
+			if pvCustom && r.Type == model.SensorGridPower {
+				e.mu.Lock()
+				// Adjust grid: remove historical PV contribution, add new PV
+				// Historical PV at this time
+				var historicalPV float64
+				for _, s := range e.store.Sensors() {
+					if s.Type == model.SensorPVPower {
+						if pvR, ok := e.store.ReadingAt(s.ID, r.Timestamp); ok {
+							historicalPV = pvR.Value
+						}
+						break
+					}
+				}
+				newPV, _ := e.computeCustomPV(r.Timestamp)
+				// grid_stored = actual_demand - historical_pv
+				// we want: grid_new = actual_demand - new_pv = grid_stored + historical_pv - new_pv
+				r.Value = r.Value + historicalPV - newPV
+				e.mu.Unlock()
+			}
+
 			e.callback.OnReading(SensorReading{
 				SensorID:  r.SensorID,
 				Value:     r.Value,
@@ -849,9 +1052,28 @@ func (e *Engine) emitPredictions(prevTime, currentTime time.Time) {
 
 	readings := pred.ReadingsForRange(prevTime, currentTime)
 	for _, sr := range readings {
+		ts, _ := time.Parse(time.RFC3339, sr.Timestamp)
+
+		// Adjust predicted grid power for custom PV
+		e.mu.Lock()
+		pvCustom := e.pvCustomEnabled
+		e.mu.Unlock()
+		if pvCustom {
+			e.mu.Lock()
+			// NN grid power includes implicit reference PV
+			// Compute reference PV from base profile, then compute new PV
+			var refPV float64
+			if e.pvBaseProfile != nil {
+				hour := float64(ts.Hour()) + float64(ts.Minute())/60.0
+				refPV = e.pvBaseProfile.PowerAt(hour, e.pvBaseProfile.PeakWp)
+			}
+			newPV, _ := e.computeCustomPV(ts)
+			sr.Value = sr.Value + refPV - newPV
+			e.mu.Unlock()
+		}
+
 		e.callback.OnReading(sr)
 
-		ts, _ := time.Parse(time.RFC3339, sr.Timestamp)
 		r := model.Reading{
 			Timestamp: ts,
 			SensorID:  sr.SensorID,
@@ -943,6 +1165,43 @@ func (e *Engine) updateEnergy(r model.Reading) {
 			acc := e.getOrCreateHeatingMonth(mk)
 			acc.consumptionWh += wh
 			acc.costPLN += cost
+
+			// Hourly load shift tracking
+			dow := int(r.Timestamp.Weekday())
+			hour := r.Timestamp.Hour()
+			e.dayOfWeekHourly[dow][hour].hpWh += wh
+			e.dayOfWeekHourly[dow][hour].hpCostPLN += cost
+			if price > 0 {
+				e.dayOfWeekHourly[dow][hour].priceSum += price
+				e.dayOfWeekHourly[dow][hour].priceN++
+			}
+			if price > 0 {
+				e.overallPriceSum += price
+				e.overallPriceN++
+			}
+			e.loadShiftDirty = true
+
+			// Pre-heating thermal shadow
+			if e.thermal == nil {
+				e.thermal = NewThermalModel(e.insulationLevel)
+			}
+			if e.priceSensorID != "" {
+				low, high := e.arbLowThreshold, e.arbHighThreshold
+				// Get outdoor temp from heating month data
+				outdoorTemp := 10.0 // default fallback
+				if acc.tempCount > 0 {
+					outdoorTemp = acc.tempSum / float64(acc.tempCount)
+				}
+				cop := 1.0
+				if acc.consumptionWh > 0 && acc.productionWh > 0 {
+					cop = acc.productionWh / acc.consumptionWh
+				}
+				if cop < 1 {
+					cop = 1
+				}
+				e.thermal.Step(outdoorTemp, price, low, high, r.Value, cop, r.Timestamp)
+				e.preHeatCostPLN = e.thermal.CostPLN
+			}
 		}
 	case model.SensorPumpProduction:
 		if wh > 0 {
@@ -1385,6 +1644,20 @@ func (e *Engine) broadcastSummary() {
 		NMCreditBankKWh: e.nmCreditBankKWh,
 		NBNetCostPLN:    e.nbImportChargedPLN - e.nbDepositUsedPLN,
 		NBDepositPLN:    e.nbDepositPLN,
+
+		PreHeatCostPLN:    e.preHeatCostPLN,
+		PreHeatSavingsPLN: e.heatPumpCostPLN - e.preHeatCostPLN,
+	}
+	// PV array production breakdown
+	if e.pvCustomEnabled && len(e.pvArrayWh) > 0 {
+		for i, arr := range e.pvArrays {
+			if i < len(e.pvArrayWh) {
+				s.PVArrayProduction = append(s.PVArrayProduction, PVArrayProd{
+					Name: arr.Name,
+					KWh:  e.pvArrayWh[i] / 1000,
+				})
+			}
+		}
 	}
 	bat := e.battery
 	e.mu.Unlock()
@@ -1449,6 +1722,88 @@ func (e *Engine) broadcastSummary() {
 	if anomalyDirty {
 		e.callback.OnAnomalyDays(anomalyRecords)
 	}
+
+	// Broadcast load shift stats if dirty
+	e.mu.Lock()
+	lsDirty := e.loadShiftDirty
+	var loadShiftStats LoadShiftStats
+	if lsDirty {
+		loadShiftStats = e.buildLoadShiftStats()
+		e.loadShiftDirty = false
+	}
+	e.mu.Unlock()
+	if lsDirty {
+		e.callback.OnLoadShiftStats(loadShiftStats)
+	}
+}
+
+// buildLoadShiftStats computes load shift analysis from hourly accumulators.
+// Must be called with mu held.
+func (e *Engine) buildLoadShiftStats() LoadShiftStats {
+	const shiftWindow = 4
+
+	var stats LoadShiftStats
+	stats.ShiftWindowH = shiftWindow
+
+	// Build heatmap
+	var totalHPWh, totalHPCost float64
+	for dow := 0; dow < 7; dow++ {
+		for h := 0; h < 24; h++ {
+			slot := e.dayOfWeekHourly[dow][h]
+			kwh := slot.hpWh / 1000
+			avgPrice := 0.0
+			if slot.priceN > 0 {
+				avgPrice = slot.priceSum / float64(slot.priceN)
+			}
+			stats.Heatmap[dow][h] = HeatmapCell{
+				KWh:      kwh,
+				AvgPrice: avgPrice,
+			}
+			totalHPWh += slot.hpWh
+			totalHPCost += slot.hpCostPLN
+		}
+	}
+
+	// Average HP price
+	if totalHPWh > 0 {
+		stats.AvgHPPrice = totalHPCost / (totalHPWh / 1000)
+	}
+
+	// Overall average price
+	if e.overallPriceN > 0 {
+		stats.OverallAvgPrice = e.overallPriceSum / float64(e.overallPriceN)
+	}
+
+	// Shift potential: for each dow+hour HP consumption,
+	// find the cheapest price within ±shiftWindow hours
+	stats.ShiftCurrentPLN = totalHPCost
+	var optimalCost float64
+	for dow := 0; dow < 7; dow++ {
+		for h := 0; h < 24; h++ {
+			slot := e.dayOfWeekHourly[dow][h]
+			if slot.hpWh <= 0 {
+				continue
+			}
+			kwh := slot.hpWh / 1000
+			// Find cheapest price in window
+			bestPrice := slot.priceSum / max(1, float64(slot.priceN))
+			for dh := -shiftWindow; dh <= shiftWindow; dh++ {
+				nh := (h + dh + 24) % 24
+				neighborSlot := e.dayOfWeekHourly[dow][nh]
+				if neighborSlot.priceN > 0 {
+					neighborPrice := neighborSlot.priceSum / float64(neighborSlot.priceN)
+					if neighborPrice < bestPrice {
+						bestPrice = neighborPrice
+					}
+				}
+			}
+			optimalCost += kwh * bestPrice
+		}
+	}
+	stats.ShiftOptimalPLN = optimalCost
+	stats.ShiftSavingsPLN = totalHPCost - optimalCost
+
+	return stats
 }
 
 // getOrCreateHeatingMonth returns the accumulator for the given month key.

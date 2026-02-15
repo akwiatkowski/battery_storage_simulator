@@ -79,6 +79,10 @@ func (m *mockCallback) OnAnomalyDays(records []AnomalyDayRecord) {
 	m.anomalyDays = append(m.anomalyDays, records)
 }
 
+func (m *mockCallback) OnLoadShiftStats(stats LoadShiftStats) {
+	// no-op for existing tests
+}
+
 func (m *mockCallback) lastHeatingStats() []HeatingMonthStat {
 	m.mu.Lock()
 	defer m.mu.Unlock()

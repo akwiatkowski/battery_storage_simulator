@@ -84,7 +84,7 @@
 			<div class="section-title">Energy Sources</div>
 			<div class="summary-row">
 				<div class="summary-item">
-					<span class="label">PV Production <HelpTip key="pvProduction" /></span>
+					<span class="label">PV Production <HelpTip key="pvProduction" />{#if simulation.pvCustomEnabled} <small>(calc)</small>{/if}</span>
 					<span class="value accent-pv">{formatKWh(simulation.pvProductionKWh)}</span>
 				</div>
 				<div class="summary-item">
@@ -96,6 +96,21 @@
 					<span class="value accent-export">{formatKWh(simulation.gridExportKWh)}</span>
 				</div>
 			</div>
+			{#if simulation.pvArrayProduction.length > 0}
+				<div class="summary-row secondary">
+					{#each simulation.pvArrayProduction as arr}
+						<div class="summary-item">
+							<span class="label">{arr.name}</span>
+							<span class="value small accent-pv">{formatKWh(arr.kwh)}</span>
+						</div>
+					{/each}
+					{#if simulation.pvArrayProduction.length < 3}
+						{#each Array(3 - simulation.pvArrayProduction.length) as _}
+							<div class="summary-item"></div>
+						{/each}
+					{/if}
+				</div>
+			{/if}
 		</div>
 	{/if}
 

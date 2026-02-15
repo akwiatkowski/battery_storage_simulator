@@ -9,9 +9,9 @@
 - CLI tool `cmd/load-analysis/` provides COP vs temperature curves, hourly cost distribution, shift potential analysis
 - Dashboard shows heat pump cost and average price in EnergySummary when spot price data is available
 
-**Remaining:**
-- Pre-heating strategy simulation (heat during cheap hours, coast during expensive)
-- Compare thermal storage (overheating the house) vs battery storage
+**Also implemented:**
+- Pre-heating strategy simulation (thermal mass shadow model, insulation levels, pre-heat during cheap hours / coast during expensive)
+- Dashboard shows pre-heating potential savings in HeatingAnalysis
 
 ## 2. Time-Series Charts
 
@@ -66,36 +66,15 @@ Simulate inverter export power caps. In Germany the "70% rule" limits feed-in to
 
 Lower priority for Poland but useful for what-if analysis when considering larger PV installations.
 
-## 7. PV Configuration & Multi-Orientation Modeling
+## ~~7. PV Configuration & Multi-Orientation Modeling~~ (DONE)
 
-Model PV production from multiple roof orientations to analyze adding panels or changing layout. Current setup: 6.5 kWp on east roof at ~40° tilt.
-
-### Solar Position Model
-
-- Compute sun azimuth and elevation for each hour using latitude/longitude (Wrocław area ~51.1°N, 17.0°E)
-- For each roof orientation (azimuth + tilt), calculate incident irradiance factor: `cos(angle_of_incidence)` clamped to [0, 1]
-- Apply atmospheric losses (air mass model) and panel efficiency curve
-
-### PV Array Configuration
-
-UI section similar to BatteryConfig:
-- **East array**: peak power (kWp), azimuth (°), tilt (°) — default: 6.5 kWp, 90° (east), 40°
-- **South array**: default: 0 kWp, 180°, 40°
-- **West array**: default: 0 kWp, 270°, 40°
-- Enable/disable each array independently
-
-### Analysis
-
-- During historical replay: scale actual PV readings by ratio of new config's theoretical output vs current config's theoretical output at each timestamp
-- During prediction mode: generate PV curve from solar model directly
-- Show per-array production breakdown
-- **Key question**: "Adding 3 kWp on west roof — how does afternoon production change net cost and self-consumption?"
-
-### Simplifications
-
-- Use clearsky irradiance model (no cloud modeling — actual cloud cover comes from real PV data scaling)
-- Ignore shading, snow, soiling
-- Temperature derating: -0.4%/°C above 25°C (use outdoor temp sensor)
+**Implemented:**
+- Data-derived PV hourly profiles from actual readings (June/July focus)
+- Profile shifting by azimuth and tilt for multi-orientation modeling
+- Custom PV configuration UI: East/South/West arrays with peak power, azimuth, tilt, enable toggle
+- Engine replaces stored PV with calculated PV when custom mode enabled, adjusts grid accordingly
+- Per-array production breakdown in EnergySummary
+- Works in both historical replay and prediction modes
 
 ## ~~8. Load Shifting Analysis~~ (DONE)
 
@@ -107,9 +86,9 @@ UI section similar to BatteryConfig:
 - Auto-discovers appliance sensors (washing, oven, drier, kettle, TV)
 - Makefile target: `make load-analysis`
 
-**Remaining:**
-- Dashboard section with load shifting recommendations
-- Appliance timing heatmap (hour vs day-of-week colored by cost)
+**Also implemented:**
+- Dashboard LoadShiftAnalysis component with HP timing efficiency, shift potential, and day-of-week × hour heatmap colored by price
+- Engine tracks hourly HP consumption and cost by day-of-week for heatmap generation
 
 ## ~~9. Consumption Anomaly Detection~~ (DONE)
 

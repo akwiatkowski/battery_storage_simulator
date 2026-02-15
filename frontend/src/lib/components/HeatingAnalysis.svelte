@@ -240,6 +240,22 @@
 						</div>
 					</div>
 				{/if}
+
+				{#if simulation.preHeatSavingsPLN > 0}
+					<div class="section-divider"></div>
+					<div class="pre-heat">
+						<div class="section-title">Pre-Heating Potential</div>
+						<div class="pre-heat-row mono">
+							{simulation.heatPumpCostPLN.toFixed(2)} PLN actual
+							<span class="pre-heat-arrow">&rarr;</span>
+							{simulation.preHeatCostPLN.toFixed(2)} PLN optimal
+							<span class="pre-heat-savings">({((simulation.preHeatSavingsPLN / simulation.heatPumpCostPLN) * 100).toFixed(1)}% savings)</span>
+						</div>
+						<div class="pre-heat-desc">
+							Strategy: pre-heat +2°C during cheap hours, coast during expensive
+						</div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -463,5 +479,34 @@
 
 	:global(.delta-bad) {
 		color: #e87c6c;
+	}
+
+	.pre-heat {
+		margin-bottom: 4px;
+	}
+
+	.pre-heat-row {
+		color: #334155;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+		margin-bottom: 4px;
+	}
+
+	.pre-heat-arrow {
+		color: #5bb88a;
+		font-weight: 600;
+	}
+
+	.pre-heat-savings {
+		font-weight: 600;
+		color: #5bb88a;
+	}
+
+	.pre-heat-desc {
+		font-size: 12px;
+		color: #94a3b8;
+		font-style: italic;
 	}
 </style>

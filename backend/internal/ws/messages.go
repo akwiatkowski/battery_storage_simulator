@@ -74,6 +74,15 @@ type SummaryPayload struct {
 	NMCreditBankKWh float64 `json:"nm_credit_bank_kwh"`
 	NBNetCostPLN    float64 `json:"nb_net_cost_pln"`
 	NBDepositPLN    float64 `json:"nb_deposit_pln"`
+
+	PreHeatCostPLN    float64             `json:"pre_heat_cost_pln"`
+	PreHeatSavingsPLN float64             `json:"pre_heat_savings_pln"`
+	PVArrayProduction []PVArrayProdPayload `json:"pv_array_production,omitempty"`
+}
+
+type PVArrayProdPayload struct {
+	Name string  `json:"name"`
+	KWh  float64 `json:"kwh"`
 }
 
 type SensorInfo struct {
@@ -104,6 +113,7 @@ const (
 	TypeBatteryConfig    = "battery:config"
 	TypeSimSetPrediction = "sim:set_prediction"
 	TypeConfigUpdate     = "config:update"
+	TypePVConfig         = "pv:config"
 
 	// Server -> Client
 	TypeSimState              = "sim:state"
@@ -116,6 +126,7 @@ const (
 	TypePredictionComparison  = "prediction:comparison"
 	TypeHeatingStats          = "heating:stats"
 	TypeAnomalyDays           = "anomaly:days"
+	TypeLoadShiftStats        = "load_shift:stats"
 )
 
 type SetPredictionPayload struct {
@@ -129,6 +140,22 @@ type ConfigUpdatePayload struct {
 	FixedTariffPLN     float64 `json:"fixed_tariff_pln"`
 	DistributionFeePLN float64 `json:"distribution_fee_pln"`
 	NetMeteringRatio   float64 `json:"net_metering_ratio"`
+	InsulationLevel    string  `json:"insulation_level,omitempty"`
+}
+
+// PV config payloads
+
+type PVConfigPayload struct {
+	Enabled bool                   `json:"enabled"`
+	Arrays  []PVArrayConfigPayload `json:"arrays"`
+}
+
+type PVArrayConfigPayload struct {
+	Name    string  `json:"name"`
+	PeakWp  float64 `json:"peak_wp"`
+	Azimuth float64 `json:"azimuth"`
+	Tilt    float64 `json:"tilt"`
+	Enabled bool    `json:"enabled"`
 }
 
 type PredictionComparisonPayload struct {
@@ -307,5 +334,58 @@ func SummaryFromEngine(s simulator.Summary) SummaryPayload {
 		NMCreditBankKWh: s.NMCreditBankKWh,
 		NBNetCostPLN:    s.NBNetCostPLN,
 		NBDepositPLN:    s.NBDepositPLN,
+
+		PreHeatCostPLN:    s.PreHeatCostPLN,
+		PreHeatSavingsPLN: s.PreHeatSavingsPLN,
+		PVArrayProduction: pvArrayProdFromEngine(s.PVArrayProduction),
+	}
+}
+
+func pvArrayProdFromEngine(prods []simulator.PVArrayProd) []PVArrayProdPayload {
+	if len(prods) == 0 {
+		return nil
+	}
+	out := make([]PVArrayProdPayload, len(prods))
+	for i, p := range prods {
+		out[i] = PVArrayProdPayload{Name: p.Name, KWh: p.KWh}
+	}
+	return out
+}
+
+// Load shift stats payloads
+
+type LoadShiftHeatmapCell struct {
+	KWh      float64 `json:"kwh"`
+	AvgPrice float64 `json:"avg_price"`
+}
+
+type LoadShiftStatsPayload struct {
+	Heatmap         [7][24]LoadShiftHeatmapCell `json:"heatmap"`
+	AvgHPPrice      float64                     `json:"avg_hp_price"`
+	OverallAvgPrice float64                     `json:"overall_avg_price"`
+	ShiftCurrentPLN float64                     `json:"shift_current_pln"`
+	ShiftOptimalPLN float64                     `json:"shift_optimal_pln"`
+	ShiftSavingsPLN float64                     `json:"shift_savings_pln"`
+	ShiftWindowH    int                         `json:"shift_window_h"`
+}
+
+func LoadShiftStatsFromEngine(stats simulator.LoadShiftStats) LoadShiftStatsPayload {
+	var heatmap [7][24]LoadShiftHeatmapCell
+	for dow := 0; dow < 7; dow++ {
+		for h := 0; h < 24; h++ {
+			heatmap[dow][h] = LoadShiftHeatmapCell{
+				KWh:      stats.Heatmap[dow][h].KWh,
+				AvgPrice: stats.Heatmap[dow][h].AvgPrice,
+			}
+		}
+	}
+	return LoadShiftStatsPayload{
+		Heatmap:         heatmap,
+		AvgHPPrice:      stats.AvgHPPrice,
+		OverallAvgPrice: stats.OverallAvgPrice,
+		ShiftCurrentPLN: stats.ShiftCurrentPLN,
+		ShiftOptimalPLN: stats.ShiftOptimalPLN,
+		ShiftSavingsPLN: stats.ShiftSavingsPLN,
+		ShiftWindowH:    stats.ShiftWindowH,
 	}
 }

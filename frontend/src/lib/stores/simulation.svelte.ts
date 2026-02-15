@@ -10,6 +10,7 @@ import {
 	MSG_PREDICTION_COMPARISON,
 	MSG_HEATING_STATS,
 	MSG_ANOMALY_DAYS,
+	MSG_LOAD_SHIFT_STATS,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
@@ -18,6 +19,7 @@ import {
 	MSG_BATTERY_CONFIG,
 	MSG_SIM_SET_PREDICTION,
 	MSG_CONFIG_UPDATE,
+	MSG_PV_CONFIG,
 	type SimStatePayload,
 	type SensorReadingPayload,
 	type SummaryPayload,
@@ -29,6 +31,8 @@ import {
 	type PredictionComparisonPayload,
 	type HeatingMonthStatPayload,
 	type AnomalyDayPayload,
+	type LoadShiftStatsPayload,
+	type PVArrayProdPayload,
 	type SensorInfo,
 	type Envelope
 } from '$lib/ws/messages';
@@ -175,6 +179,27 @@ class SimulationStore {
 	// Anomaly day records
 	anomalyDayRecords = $state<AnomalyDayPayload[]>([]);
 
+	// Pre-heating
+	preHeatCostPLN = $state(0);
+	preHeatSavingsPLN = $state(0);
+
+	// Insulation config
+	insulationLevel = $state('good');
+
+	// Load shift stats
+	loadShiftStats = $state<LoadShiftStatsPayload | null>(null);
+
+	// PV array production
+	pvArrayProduction = $state<PVArrayProdPayload[]>([]);
+
+	// Custom PV config
+	pvCustomEnabled = $state(false);
+	pvArrays = $state([
+		{ name: 'East', peak_wp: 6500, azimuth: 90, tilt: 40, enabled: true },
+		{ name: 'South', peak_wp: 0, azimuth: 180, tilt: 40, enabled: false },
+		{ name: 'West', peak_wp: 0, azimuth: 270, tilt: 40, enabled: false }
+	]);
+
 	// Daily off-grid tracking
 	dailyRecords = $state<DailyRecord[]>([]);
 	private currentDayKey = '';
@@ -293,8 +318,19 @@ class SimulationStore {
 			temp_offset_c: this.tempOffsetC,
 			fixed_tariff_pln: this.fixedTariffPLN,
 			distribution_fee_pln: this.distributionFeePLN,
-			net_metering_ratio: this.netMeteringRatio
+			net_metering_ratio: this.netMeteringRatio,
+			insulation_level: this.insulationLevel
 		});
+	}
+
+	setPVConfig(): void {
+		this.client?.send(MSG_PV_CONFIG, {
+			enabled: this.pvCustomEnabled,
+			arrays: this.pvArrays
+		});
+		this.timeSeriesData = [];
+		this.dailyRecords = [];
+		this.currentDayKey = '';
 	}
 
 	setChartWindow(w: string): void {
@@ -383,6 +419,9 @@ class SimulationStore {
 				this.nmCreditBankKWh = p.nm_credit_bank_kwh;
 				this.nbNetCostPLN = p.nb_net_cost_pln;
 				this.nbDepositPLN = p.nb_deposit_pln;
+				this.preHeatCostPLN = p.pre_heat_cost_pln;
+				this.preHeatSavingsPLN = p.pre_heat_savings_pln;
+				this.pvArrayProduction = p.pv_array_production ?? [];
 				this.trackDailyData(p);
 				break;
 			}
@@ -436,6 +475,10 @@ class SimulationStore {
 			}
 			case MSG_ANOMALY_DAYS: {
 				this.anomalyDayRecords = envelope.payload as AnomalyDayPayload[];
+				break;
+			}
+			case MSG_LOAD_SHIFT_STATS: {
+				this.loadShiftStats = envelope.payload as LoadShiftStatsPayload;
 				break;
 			}
 			case MSG_DATA_LOADED: {

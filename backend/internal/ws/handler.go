@@ -173,6 +173,29 @@ func (h *Handler) handleMessage(msg []byte) {
 		if p.NetMeteringRatio > 0 {
 			h.engine.SetNetMeteringRatio(p.NetMeteringRatio)
 		}
+		if p.InsulationLevel != "" {
+			h.engine.SetInsulationLevel(simulator.InsulationLevel(p.InsulationLevel))
+		}
+
+	case TypePVConfig:
+		var p PVConfigPayload
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("Invalid pv:config payload: %v", err)
+			return
+		}
+		arrays := make([]simulator.PVArrayConfig, len(p.Arrays))
+		for i, a := range p.Arrays {
+			arrays[i] = simulator.PVArrayConfig{
+				Name:    a.Name,
+				PeakWp:  a.PeakWp,
+				Azimuth: a.Azimuth,
+				Tilt:    a.Tilt,
+				Enabled: a.Enabled,
+			}
+		}
+		h.engine.SetPVConfig(p.Enabled, arrays)
+		// Reset simulation to apply PV config from the start
+		h.engine.Seek(h.engine.TimeRange().Start)
 
 	default:
 		log.Printf("Unknown message type: %s", env.Type)
