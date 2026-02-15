@@ -28,5 +28,8 @@ input/
 # Docker
 docker-compose.override.yml
 
+# Credentials
+.env
+
 # mise
 .mise.local.toml
