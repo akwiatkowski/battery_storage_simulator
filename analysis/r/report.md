@@ -1,253 +1,204 @@
-# Why Hourly Averages Are Misleading for Energy System Sizing
+# Home Energy Analysis
 
-A data-driven analysis of real home energy data showing why peak power — not
-average power — should drive inverter, battery, and PV system design.
+A data-driven analysis of a single-family home with 10 kWp PV, air-source heat
+pump, and 37 sensor channels — covering solar sizing, heat pump diagnostics,
+building envelope, indoor climate, and energy economics.
 
 ## Executive Summary
 
-Hourly average power readings are the standard unit in energy monitoring
-systems like Home Assistant. But within each hour, actual power fluctuates
-wildly: peak demand is typically **1.5-3x** the hourly average, and brief
-solar export bursts are invisible in averaged data. This analysis quantifies
-the gap and its financial consequences.
+This report analyzes ~15 months of real home energy data at hourly resolution,
+supplemented by high-resolution (60-second) recent data. The analysis covers
+seven areas: solar system sizing, energy economics, heat pump performance, hot
+water efficiency, building thermal quality, indoor comfort, and grid power quality.
 
 **Key findings:**
-- Median peak-to-average ratio is ~1.8x across all hours
-- ~30% of "import" hours actually contain hidden PV export moments
-- Sizing an inverter to hourly averages leaves 20-40% of peaks uncovered
-- The annual cost of undersizing can reach hundreds of PLN
-- Winter drives inverter sizing requirements more than summer
-- Battery self-sufficiency shows strong diminishing returns above 5-10 kWh
+- Peak power is 1.5-3x hourly averages — sizing to averages undersizes everything
+- Self-sufficiency reaches 47% in summer with PV alone, 3% in December
+- Defrost cycles consume 14-17% of winter HP energy (302 kWh/year)
+- DHW tank standby loss is 55W continuous (~384 PLN/year)
+- Rooms run too warm (21% of hours >25°C) — heating curve is over-steep
+- Workshop battery storage is feasible with minimal insulation + waste heat
+- All living spaces have zero mold risk; workshop (garage) has 64%
 
 ---
 
-## 1. The Data
+# Part I — Solar & Grid Sizing
 
-We use two data sources:
-- **Legacy Home Assistant exports** (hourly readings, ~1 year)
-- **High-resolution recent data** (~60-second intervals, recent weeks)
+The original question: are hourly averages sufficient for sizing inverters,
+batteries, and wiring? No. Peak power within each hour is systematically
+higher, and the gap has financial consequences.
 
-The high-res data lets us compute true min/max within each hour, revealing
-information that hourly averages discard.
-
-### Heat Pump Performance
-
-The heat pump's COP (Coefficient of Performance) depends heavily on outdoor
-temperature. Below 0°C, efficiency drops sharply.
-
-![COP vs Temperature](output/01_cop_vs_temp.png)
-
-COP varies by time of day (morning defrost periods vs afternoon):
-
-![COP by Time of Day](output/01_cop_by_time.png)
-
----
-
-## 2. The Grid Power Pattern
+## Grid Power Pattern
 
 Average grid power follows a predictable pattern: import in the morning and
-evening, export during solar hours midday.
+evening, export during midday solar hours.
 
 ![Grid Heatmap](output/02_grid_heatmap.png)
 
 But averages hide the variance within each hour.
 
----
+## Peaks vs Averages
 
-## 3. The Problem: Peaks vs Averages
-
-### 3.1 The Scatter
-
-Every hour plotted as (average, peak). Points above the 1:1 line — all of
-them — show where peak exceeded average. Many hours have peaks 2-3x the
-average.
+Every hour plotted as (average, peak). All points above the 1:1 line — nearly
+all of them — show where peak exceeded average:
 
 ![Peak vs Average Scatter](output/03_peak_vs_avg_scatter.png)
 
-### 3.2 The Ratio Distribution
-
-The histogram of peak/average ratios shows the typical multiplier is ~1.8x:
+The typical peak/average ratio is ~1.8x:
 
 ![Ratio Histogram](output/03_ratio_histogram.png)
 
-### 3.3 Inverter Sizing Implications
-
-If you size your inverter using hourly averages (green curve), you think a
-small inverter suffices. But to cover 95% of actual peak demand (red curve),
-you need significantly more:
+Sizing an inverter to hourly averages (green) leaves peaks uncovered. Covering
+95% of actual demand (red) requires significantly more:
 
 ![Inverter Sizing Curve](output/03_inverter_sizing.png)
 
-### 3.4 When Is the Gap Worst?
-
-The gap between average and peak power varies by hour of day. Midday
-(solar fluctuations) and evening (cooking + heating) show the biggest
-discrepancies:
+The gap between average and peak is worst at midday (solar fluctuations) and
+evening (cooking + heating):
 
 ![Hourly Gap](output/03_hourly_gap.png)
 
----
+## Hidden PV Generation
 
-## 4. Hidden PV Generation
-
-Some hours appear as "pure import" (positive average) but actually contained
-moments of solar export (negative instantaneous power). Hourly averaging
-cancels out these brief export bursts.
+~30% of "import" hours actually contain moments of solar export. Hourly
+averaging cancels out these brief bursts:
 
 ![Hidden PV Scatter](output/06_hidden_pv_scatter.png)
 
-Hidden PV is concentrated in morning and late afternoon hours — the edges
-of the solar window:
-
 ![Hidden PV Hourly](output/06_hidden_pv_hourly.png)
 
-A single day's data shows just how much the average (black line) conceals
-compared to the actual min-max range (red band):
+A single day shows how much the average conceals vs the actual min-max range:
 
 ![One Day Range](output/06_one_day_range.png)
 
----
+## Power Duration Curves
 
-## 5. Power Duration Curves
-
-Classic power engineering visualization: sort all peaks highest-to-lowest
-and plot. The curve shows that extreme peaks (>5 kW) occur only a few
-percent of the time:
-
-![Import Duration](output/07_import_duration.png)
-
-![Export Duration](output/07_export_duration.png)
-
-Overlaying both shows whether import or export drives the inverter size:
+Extreme peaks (>5 kW) occur only a few percent of the time. Import vs export
+overlaid shows which drives inverter sizing:
 
 ![Combined Duration](output/07_combined_duration.png)
 
----
+## Export Clipping
 
-## 6. Export Clipping
-
-When the inverter caps export power, excess PV generation is wasted. The
-clipping loss curve shows diminishing returns as inverter size increases:
+When the inverter caps export power, excess PV is wasted. Diminishing returns
+as inverter size increases:
 
 ![Export Clipping](output/05_export_clipping.png)
 
-The distribution of peak export power shows where most hours fall:
+## Seasonal Variation
 
-![Export Distribution](output/05_export_distribution.png)
-
----
-
-## 7. Seasonal Variation
-
-### 7.1 Sizing by Season
-
-Different seasons have different peak power profiles. Winter typically
-drives the inverter size requirement:
+Winter drives inverter sizing more than summer — high heating demand creates
+the largest peaks:
 
 ![Seasonal Peak Sizing](output/08_seasonal_peak_sizing.png)
 
-### 7.2 The Average-Peak Gap by Season
-
 ![Seasonal Gap](output/08_seasonal_gap.png)
-
-### 7.3 Daily Profiles by Season
 
 ![Seasonal Profiles](output/08_seasonal_profiles.png)
 
----
+## Financial Impact of Undersizing
 
-## 8. Financial Impact
-
-### 8.1 Annual Cost of Undersizing
-
-Combining peak power data with spot electricity prices gives the actual
-monetary cost of clipping at each inverter size:
+Monetary cost of clipping at each inverter size, using real spot prices:
 
 ![Clipping Cost](output/09_clipping_cost.png)
 
-### 8.2 When Clipping Costs Most
-
-The hourly breakdown (at 3 kW) shows that high-price evening peaks are
-the most expensive to clip:
+High-price evening peaks are the most expensive to clip:
 
 ![Clipping by Hour](output/09_clipping_by_hour.png)
 
-### 8.3 Marginal Value
-
-Each additional kW of inverter capacity saves less money than the previous
-one — classic diminishing returns:
+Each additional kW of inverter capacity saves less than the previous one:
 
 ![Marginal Value](output/09_marginal_value.png)
 
 ---
 
-## 9. Battery Self-Sufficiency
+# Part II — Solar Economy
 
-A simple battery simulation shows what % of hours can avoid grid import
-at each capacity. The curve rises steeply at first (high value per kWh),
-then flattens:
+How solar generation, spot prices, and load patterns interact to determine
+the economic value of PV and battery systems.
 
-![Self Sufficiency](output/04_self_sufficiency.png)
+## Spot Price Patterns
 
----
-
-## 10. Electricity Market Structure
-
-Eight years of spot price data (2018-2026) reveal the underlying price
-patterns that drive every optimization decision.
+Eight years of spot price data (2018-2026) — the 2022 energy crisis is
+clearly visible:
 
 ![Price Heatmap](output/10_price_heatmap.png)
 
-The year-over-year evolution shows structural changes — the 2022 energy
-crisis is clearly visible:
-
 ![Price YoY](output/10_price_yoy.png)
 
-Daily price volatility (max/min ratio) determines the potential for
-arbitrage and load shifting:
+Daily price volatility (max/min ratio) determines arbitrage and load-shifting
+potential:
 
 ![Price Volatility](output/10_price_volatility.png)
 
----
+## PV Self-Consumption
 
-## 11. Heat Pump Temperature Lift
-
-The heat pump's water temperature lift (outlet - inlet) directly determines
-efficiency. Higher lifts mean harder work for the compressor:
-
-![COP vs Delta-T](output/11_cop_vs_delta_t.png)
-
-DHW (hot water) cycles require much higher temperature lifts than space
-heating, making them significantly less efficient:
-
-![Heating vs DHW](output/11_heating_vs_dhw.png)
-
----
-
-## 12. PV Self-Consumption
-
-How much solar generation is actually used by the house vs exported?
+How much solar generation is used directly vs exported:
 
 ![Self-Consumption Hourly](output/12_self_consumption_hourly.png)
 
 ![PV Utilization](output/12_pv_utilization.png)
 
----
+## Self-Sufficiency
 
-## 13. Baseload
+A self-sufficient hour draws no grid power. Overall: 22.8% of hours, peaking
+at 47% in June:
 
-The always-on power floor — fridge, network equipment, standby devices:
+![Self-Sufficiency Heatmap](output/37_self_sufficiency_heatmap.png)
+
+![Self-Sufficiency Monthly](output/37_self_sufficiency_monthly.png)
+
+Daily self-sufficiency rate (daytime hours, 6-20h):
+
+![Self-Sufficiency Calendar](output/37_self_sufficiency_calendar.png)
+
+## Appliance vs PV Timing
+
+Do major appliances run during solar hours? Washing machine already 37%
+solar-covered, oven 21%:
+
+![Appliance Timing vs PV](output/35_appliance_timing_vs_pv.png)
+
+![Appliance Solar Coverage](output/35_appliance_solar_coverage.png)
+
+Shifting all runs to PV peak hours (10-14h) would save ~35 PLN/year:
+
+![Appliance Shift Savings](output/35_appliance_shift_savings.png)
+
+## Battery Self-Sufficiency
+
+Simulated battery at each capacity. Steep initial rise, then diminishing returns:
+
+![Self Sufficiency](output/04_self_sufficiency.png)
+
+## Battery Temperature Feasibility
+
+Can LFP batteries survive year-round in an unheated workshop (metal garage)?
+Charge limit: 0°C, discharge limit: -10°C.
+
+With light insulation + battery waste heat (300W) + 50W heating pad, no-charge
+days drop from 108 to 12 — just 2% of the year:
+
+![Battery Feasibility](output/26_battery_feasibility.png)
+
+![Battery Days Lost](output/26_battery_days_lost.png)
+
+PV surplus lost because the battery is too cold to charge — negligible with
+insulation:
+
+![Lost PV Surplus](output/26_lost_pv_surplus.png)
+
+## Baseload
+
+The always-on power floor — fridge, network, standby devices:
 
 ![Baseload Hourly](output/13_baseload_hourly.png)
 
 ![Baseload Cost](output/13_baseload_cost.png)
 
----
+## Appliance Load Shifting
 
-## 14. Appliance Load Shifting
-
-Washing machine, drier, and oven usage overlaid with spot prices reveals
-shifting potential:
+Washing machine, drier, and oven usage overlaid with spot prices:
 
 ![Cycle Times](output/14_cycle_times.png)
 
@@ -257,549 +208,316 @@ shifting potential:
 
 ---
 
-## 15. Indoor Temperature Stability
+# Part III — Heat Pump Performance
 
-Room-by-room temperature comparison reveals which rooms are warmer or
-cooler, and how stable each room maintains temperature:
+Diagnosing the air-source heat pump: COP drivers, compressor behavior,
+defrost overhead, and weather effects.
 
-![Room Temperature Comparison](output/15_room_temp_comparison.png)
+## COP vs Outdoor Temperature
 
-Daily temperature swing (max - min) per room shows stability — smaller
-swing means better thermal inertia or more consistent heating:
+COP depends heavily on outdoor temperature. Below 0°C, efficiency drops sharply:
 
-![Daily Temperature Range](output/15_daily_temp_range.png)
+![COP vs Temperature](output/01_cop_vs_temp.png)
 
-Indoor vs outdoor correlation shows thermal lag — how quickly the
-building responds to outdoor temperature changes:
+COP varies by time of day (morning defrost periods vs afternoon):
 
-![Thermal Response](output/15_thermal_response.png)
+![COP by Time of Day](output/01_cop_by_time.png)
 
----
+## Temperature Lift
 
-## 16. Heat Pump Compressor Diagnostics
+The water temperature lift (outlet - inlet) directly determines efficiency.
+DHW cycles require much higher lifts (40-50°C vs 5-10°C for heating):
 
-Compressor speed vs COP demonstrates part-load efficiency — lower
-compressor speeds achieve higher COP:
+![COP vs Delta-T](output/11_cop_vs_delta_t.png)
+
+![Heating vs DHW](output/11_heating_vs_dhw.png)
+
+## Compressor Diagnostics
+
+Lower compressor speeds achieve higher COP — part-load efficiency matters:
 
 ![Compressor vs COP](output/16_compressor_vs_cop.png)
 
-True thermal power calculated from flow × ΔT compared with the
-reported production sensor reveals measurement accuracy:
+True thermal power (flow × ΔT) vs reported sensor — measurement accuracy check:
 
 ![Thermal Power](output/16_thermal_power.png)
 
-The refrigerant cycle (discharge temperature vs high pressure, colored
-by COP) shows how hard the compressor is working:
+Refrigerant cycle (discharge temperature vs high pressure, colored by COP):
 
 ![Refrigerant Cycle](output/16_refrigerant_cycle.png)
 
----
+## Cycling & Modulation
 
-## 17. Indoor Air Quality
-
-CO2 levels by room reveal occupancy patterns — bedroom peaks at night,
-living room in the evening:
-
-![CO2 Daily Pattern](output/17_co2_daily_pattern.png)
-
-Noise levels from the Netatmo sensor track daily activity:
-
-![Noise Pattern](output/17_noise_pattern.png)
-
-Atmospheric pressure trend correlates with weather fronts:
-
-![Pressure Trend](output/17_pressure_trend.png)
-
----
-
-## 18. Voltage & Power Quality
-
-Grid voltage varies by time of day — higher at night (low demand),
-dipping during peak hours. The 253V curtailment threshold matters for PV:
-
-![Voltage Profile](output/18_voltage_profile.png)
-
-Per-circuit voltage comparison shows wiring voltage drop from the meter
-to each outlet:
-
-![Circuit Voltage](output/18_circuit_voltage.png)
-
-Power factor below 90% indicates significant reactive power, common with
-heat pump compressor operation:
-
-![Power Factor](output/18_power_factor.png)
-
-Voltage rises during PV export — a clear indicator of grid saturation:
-
-![Voltage vs Export](output/18_voltage_vs_export.png)
-
----
-
-## 19. Workshop Thermal Response
-
-The unheated workshop's temperature follows outdoor conditions closely,
-revealing building envelope characteristics:
-
-![Workshop Time Series](output/19_workshop_timeseries.png)
-
-Thermal coupling analysis: slope < 1 means the building envelope provides
-some damping, but R² close to 1 means minimal independent temperature control:
-
-![Workshop Scatter](output/19_workshop_scatter.png)
-
-Cross-correlation reveals the thermal lag — how many hours for outdoor
-changes to propagate indoors:
-
-![Workshop Lag](output/19_workshop_lag.png)
-
----
-
-## 20. Heating Curve Audit
-
-The heat pump uses a weather-compensating curve: outdoor temperature
-determines the target water supply temperature. A wrong curve wastes energy.
-
-![Heating Curve](output/20_heating_curve.png)
-
-Does the configured curve actually deliver indoor comfort? Room temperatures
-by outdoor temperature bin reveal over- or under-heating:
-
-![Curve vs Comfort](output/20_curve_vs_comfort.png)
-
-When and where is the curve wrong? The overheating map shows excess heat
-(red) or insufficient heat (blue) by hour and outdoor temperature:
-
-![Overheating Map](output/20_overheating_map.png)
-
-Higher water temperatures cost efficiency. The COP penalty for each degree
-of water temperature increase:
-
-![Curve Efficiency](output/20_curve_efficiency.png)
-
----
-
-## 21. Room-by-Room Thermal Response
-
-How fast each room loses heat when the HP cycles off — a direct measure
-of insulation quality and thermal mass:
-
-![Cooling Rates](output/21_cooling_rates.png)
-
-Thermal inertia ranking — hours to lose 1°C. Higher = room holds heat
-longer and needs less frequent HP operation:
-
-![Thermal Inertia](output/21_thermal_inertia.png)
-
-Overnight temperature drop (22:00 → 06:00) reveals which rooms need the
-most heating recovery in the morning:
-
-![Night Drop](output/21_night_drop.png)
-
-Temperature uniformity across rooms — a wide spread means some rooms are
-over-heated while others are under-heated:
-
-![Uniformity](output/21_uniformity.png)
-
----
-
-## 22. Heat Pump Cycling & Modulation
-
-Compressor speed distribution reveals whether the HP modulates smoothly
-or spends too much time at extremes:
+Compressor speed distribution — smooth modulation or excessive on/off?
 
 ![Modulation Histogram](output/22_modulation_histogram.png)
 
-Short cycling detection — too many on/off transitions per day reduce COP
-and increase compressor wear:
+Short cycling detection — too many transitions per day waste energy:
 
 ![Cycling Detection](output/22_cycling_detection.png)
 
-Defrost cycles identified by outside pipe temperature depression below
-outdoor air temperature:
-
-![Defrost Detection](output/22_defrost_detection.png)
-
-The part-load sweet spot — COP vs compressor speed at different outdoor
-temperatures reveals the optimal operating range:
+The part-load sweet spot — COP vs compressor speed at different outdoor temps:
 
 ![Part-Load Sweet Spot](output/22_partload_sweetspot.png)
 
----
+## Defrost Energy Budget
 
-## 23. DHW Timing Optimization
+Defrost cycles reverse the refrigerant to melt ice from the outdoor evaporator.
+They produce zero useful heat — pure overhead.
 
-When does domestic hot water heating happen vs when COP is highest?
-Misalignment = wasted energy:
+Frequency increases sharply below -5°C, consuming 14-17% of winter HP energy:
 
-![DHW Timing](output/23_dhw_timing.png)
+![Defrost by Temperature](output/31_defrost_by_temp.png)
 
-Tank heat loss rate during idle periods — steeper slope means the tank
-loses heat faster and needs more frequent reheating:
+![Defrost Duration](output/31_defrost_duration.png)
 
-![DHW Tank Loss](output/23_dhw_tank_loss.png)
+Monthly defrost energy as fraction of total HP consumption:
 
-COP improvement potential: actual DHW timing vs optimal scheduling at
-best-COP hours of each day:
+![Defrost Monthly Energy](output/31_defrost_monthly_energy.png)
 
-![DHW COP Potential](output/23_dhw_cop_potential.png)
+Pipe temperature during a defrost event:
 
-DHW heating cost by hour and month — dark cells are the most expensive
-times to heat water:
+![Defrost Pipe Example](output/31_defrost_pipe_example.png)
 
-![DHW Cost Heatmap](output/23_dhw_cost_heatmap.png)
+## Wind Chill Effect
 
----
-
-## 24. Wind Chill & Heat Loss
-
-Wind strips heat from the HP's outdoor evaporator coil, reducing COP.
-The effect is measurable even at moderate wind speeds:
+Wind strips heat from the evaporator coil, reducing COP measurably:
 
 ![Wind vs COP](output/24_wind_vs_cop.png)
 
-Wind direction matters — certain directions expose more building surface
-or the HP outdoor unit directly:
+Certain wind directions expose more building surface or the outdoor unit:
 
 ![Wind Rose Heating](output/24_wind_rose_heating.png)
 
-Wind-driven indoor temperature deviation despite HP running:
-
-![Wind Indoor Effect](output/24_wind_indoor_effect.png)
-
-HP works harder in windy conditions — power consumption rises with wind
-speed even at the same outdoor temperature:
+HP works harder in windy conditions at the same outdoor temperature:
 
 ![Wind Power Demand](output/24_wind_power_demand.png)
 
 ---
 
-## 25. Heating Savings & Cooling Projections
+# Part IV — Domestic Hot Water
 
-How much heating energy each outdoor temperature contributes per month,
-at 0.1°C resolution:
+DHW heating is the least efficient HP mode (high temperature lift) and the
+tank loses heat continuously. Two opportunities: better timing and less loss.
 
-![Heating Energy Curve](output/25_heating_energy_curve.png)
+## DHW Timing Optimization
 
-Weekly savings from reducing indoor temperature: -1°C, -2°C, -3°C, or
-enforcing a 21°C maximum:
+When does DHW heating happen vs when COP is highest? Misalignment wastes energy:
 
-![Weekly Savings kWh](output/25_weekly_savings_kwh.png)
+![DHW Timing](output/23_dhw_timing.png)
 
-![Weekly Savings PLN](output/25_weekly_savings_pln.png)
+COP improvement potential — actual timing vs optimal scheduling:
 
-Estimated cooling energy needed in summer (May–Sep) for different target
-temperatures. Right panel shows impact of +2.7°C global (+4°C European) warming:
+![DHW COP Potential](output/23_dhw_cop_potential.png)
 
-![Cooling Energy](output/25_cooling_energy.png)
+Cost by hour and month — dark cells are the most expensive times:
 
-Monthly cooling breakdown — current climate vs global warming scenario:
+![DHW Cost Heatmap](output/23_dhw_cost_heatmap.png)
 
-![Cooling Monthly](output/25_cooling_monthly.png)
+## Tank Standby Loss
 
----
-
-## 26. Battery Temperature Feasibility
-
-Can batteries survive year-round in an unheated workshop (metal garage)?
-LFP batteries typically cannot charge below 0°C and cannot discharge below -10°C.
-
-The workshop's measured thermal damping (0.38) shows it already buffers outdoor
-extremes moderately. With light insulation (50mm foam), battery waste heat
-(~300W during charging), and an optional 50W heating pad, the picture improves
-dramatically.
-
-Annual daily minimum temperature under each scenario:
-
-![Battery Feasibility](output/26_battery_feasibility.png)
-
-Monthly count of days when the battery cannot charge (daily min < 0°C):
-
-![Battery Days Lost](output/26_battery_days_lost.png)
-
-How much PV surplus is actually lost because the battery is too cold to charge?
-Grey bars show total monthly PV surplus; colored bars show what's wasted:
-
-![Lost PV Surplus](output/26_lost_pv_surplus.png)
-
----
-
-## 27. Mold Risk Assessment
-
-The Magnus formula converts temperature and relative humidity into a dewpoint.
-When the actual surface temperature approaches within 3°C of dewpoint, condensation
-risk rises — especially on thermal bridges (window frames, external wall corners).
-
-Room-by-room mold risk ranking shows which rooms come closest to condensation:
-
-![Mold Risk Ranking](output/27_mold_risk_ranking.png)
-
-The dewpoint proximity heatmap (hour × month) reveals seasonal and daily patterns:
-
-![Mold Risk Heatmap](output/27_mold_risk_heatmap.png)
-
-Daily pattern — when during the day is the risk highest?
-
-![Mold Risk Daily](output/27_mold_risk_daily.png)
-
-Dewpoint vs outdoor temperature — does outdoor cold drive indoor condensation risk?
-
-![Dewpoint vs Outdoor](output/27_dewpoint_vs_outdoor.png)
-
----
-
-## 29. Thermal Comfort (ASHRAE)
-
-ASHRAE Standard 55 defines the comfort zone: 19-25°C and 30-70% RH. Every
-room-hour is classified as comfortable, too cold, too warm, too dry, or too humid.
-
-Temperature-humidity scatter per room with the comfort zone highlighted:
-
-![Comfort Scatter](output/29_comfort_scatter.png)
-
-Stacked comfort score per room — what fraction of time is each room comfortable?
-
-![Comfort Score](output/29_comfort_score.png)
-
-Daily comfort profile — when during the day are rooms most/least comfortable?
-
-![Comfort Daily](output/29_comfort_daily.png)
-
----
-
-## 31. Defrost Energy Budget
-
-Heat pumps reverse the refrigerant cycle periodically to melt ice from the outdoor
-evaporator. This costs energy and produces zero useful heat. Defrost events are
-detected when the outside pipe temperature spikes above outdoor air temperature.
-
-Defrost frequency vs outdoor temperature — colder = more defrost:
-
-![Defrost by Temperature](output/31_defrost_by_temp.png)
-
-How long do defrost events last?
-
-![Defrost Duration](output/31_defrost_duration.png)
-
-Monthly defrost energy as a fraction of total HP consumption:
-
-![Defrost Monthly Energy](output/31_defrost_monthly_energy.png)
-
-Example day showing pipe temperature during defrost events:
-
-![Defrost Pipe Example](output/31_defrost_pipe_example.png)
-
----
-
-## 32. DHW Tank Standby Loss
-
-The domestic hot water tank loses heat to its surroundings continuously. By fitting
-an exponential decay model to idle cooling periods, we measure the thermal time
-constant (τ) and standby power loss.
-
-One-week tank temperature profile with heating and idle periods:
+Exponential decay model fit to idle cooling periods: τ ≈ 105 hours, steady
+standby loss ≈ 55W. Annual cost: ~384 PLN.
 
 ![DHW Tank Profile](output/32_dhw_tank_profile.png)
 
-Distribution of cooling rates during idle periods:
-
 ![DHW Cooling Rate](output/32_dhw_cooling_rate.png)
 
-Reheat schedule model — how long until the tank reaches 40°C from different starting
-temperatures?
+How long until the tank reaches 40°C from different starting temperatures:
 
 ![DHW Reheat Schedule](output/32_dhw_reheat_schedule.png)
 
 ---
 
-## 34. Pressure Fronts & Heating Demand
+# Part V — Building Envelope & Heating
 
-Atmospheric pressure changes signal incoming weather fronts. Falling pressure
-(low-pressure system approaching) often precedes cold, wet weather that increases
-heating demand.
+Understanding the thermal performance of the building: which rooms hold heat,
+where the heating curve is wrong, and what temperature changes would save.
 
-6-hour pressure change vs HP power consumption:
+## Heating Curve Audit
 
-![Pressure Change vs Heating](output/34_pressure_change_vs_heating.png)
+The HP uses a weather-compensating curve: outdoor temperature → target water
+supply temperature. A wrong curve wastes energy.
 
-Cross-correlation at different time lags — does pressure predict heating demand?
+![Heating Curve](output/20_heating_curve.png)
 
-![Pressure Cross-Correlation](output/34_pressure_crosscorr.png)
+Room temperatures by outdoor bin reveal over- or under-heating:
 
-HP power by pressure regime (falling, stable, rising):
+![Curve vs Comfort](output/20_curve_vs_comfort.png)
 
-![Pressure Regime Heating](output/34_pressure_regime_heating.png)
+Where is the curve wrong? Red = overheating, blue = insufficient:
 
----
+![Overheating Map](output/20_overheating_map.png)
 
-## 35. Appliance Timing vs PV Availability
+COP penalty for each unnecessary degree of water temperature:
 
-Do major appliances (washing machine, oven) run during solar hours? Shifting them
-to midday maximizes self-consumption.
+![Curve Efficiency](output/20_curve_efficiency.png)
 
-Appliance usage profile overlaid with PV generation:
+## Indoor Temperature Stability
 
-![Appliance Timing vs PV](output/35_appliance_timing_vs_pv.png)
+Room-by-room comparison — which rooms are warmer, cooler, more stable:
 
-Solar coverage per appliance — what fraction already runs on sunshine?
+![Room Temperature Comparison](output/15_room_temp_comparison.png)
 
-![Appliance Solar Coverage](output/35_appliance_solar_coverage.png)
+Daily temperature swing per room:
 
-Potential savings from shifting all appliance runs to PV peak hours (10-14h):
+![Daily Temperature Range](output/15_daily_temp_range.png)
 
-![Appliance Shift Savings](output/35_appliance_shift_savings.png)
+## Room Thermal Response
 
----
+Cooling rate when the HP cycles off — a direct measure of insulation and
+thermal mass per room:
 
-## 36. Noise as Occupancy Proxy
+![Cooling Rates](output/21_cooling_rates.png)
 
-Indoor noise levels from the Netatmo sensor approximate occupancy: quiet (<35 dB)
-suggests empty rooms, active (>45 dB) suggests occupants.
+Thermal inertia ranking — hours to lose 1°C:
 
-Daily noise pattern — weekday vs weekend:
+![Thermal Inertia](output/21_thermal_inertia.png)
 
-![Noise Daily Pattern](output/36_noise_daily_pattern.png)
+Overnight temperature drop (22:00 → 06:00):
 
-Grid consumption at different noise levels:
+![Night Drop](output/21_night_drop.png)
 
-![Noise vs Energy](output/36_noise_vs_energy.png)
+Temperature uniformity across rooms — wide spread means zoning problems:
 
-Heating during unoccupied periods — potential setback savings:
+![Uniformity](output/21_uniformity.png)
 
-![Unoccupied Heating](output/36_unoccupied_heating.png)
+## Workshop Thermal Response
 
----
+The unheated workshop follows outdoor conditions closely:
 
-## 37. Self-Sufficiency Calendar
+![Workshop Time Series](output/19_workshop_timeseries.png)
 
-A self-sufficient hour is one where the home draws no grid power (grid_power ≤ 0).
-This measures how much of the time the house could theoretically operate off-grid
-with current PV.
+![Workshop Scatter](output/19_workshop_scatter.png)
 
-Month × hour heatmap — green cells show self-sufficient hours:
+Thermal lag — hours for outdoor changes to propagate:
 
-![Self-Sufficiency Heatmap](output/37_self_sufficiency_heatmap.png)
+![Workshop Lag](output/19_workshop_lag.png)
 
-Monthly self-sufficiency rate:
+## Heating Savings & Cooling Projections
 
-![Self-Sufficiency Monthly](output/37_self_sufficiency_monthly.png)
+Energy contributed by each outdoor temperature bin:
 
-GitHub-style calendar — daily self-sufficiency rate (daytime hours only, 6-20h):
+![Heating Energy Curve](output/25_heating_energy_curve.png)
 
-![Self-Sufficiency Calendar](output/37_self_sufficiency_calendar.png)
+Weekly savings from reducing indoor temperature (-1°C, -2°C, -3°C, max 21°C):
 
----
+![Weekly Savings kWh](output/25_weekly_savings_kwh.png)
 
-## Conclusions
+![Weekly Savings PLN](output/25_weekly_savings_pln.png)
 
-1. **Hourly averages are not sufficient for system sizing.** Peak power is
-   typically 1.5-3x higher than the hourly average, and this matters for
-   inverter, battery, and wiring specifications.
+Estimated cooling energy for summer. Right panel: impact of +4°C European warming:
 
-2. **Hidden PV generation exists in ~30% of "import" hours.** Brief solar
-   export moments are invisible in averaged data but represent real energy
-   flow that affects battery and inverter requirements.
+![Cooling Energy](output/25_cooling_energy.png)
 
-3. **Winter drives inverter sizing.** High heating demand creates the largest
-   peaks, even though summer has more total energy flow from PV.
-
-4. **Diminishing returns are real.** Whether for battery capacity or inverter
-   power rating, the marginal value of each additional unit drops quickly.
-   The economically optimal size is usually well below the technical maximum.
-
-5. **Spot price timing matters.** The financial impact of clipping depends
-   not just on how much power is clipped, but *when* — expensive hours
-   amplify the cost.
-
-6. **DHW cycles are the efficiency outlier.** Hot water heating requires
-   much higher temperature lifts (40-50°C vs 5-10°C for space heating),
-   resulting in significantly lower COP. Pre-heating DHW during solar
-   hours could save meaningful energy.
-
-7. **PV self-consumption is the first lever.** Before adding batteries or
-   selling export, maximizing direct use of solar generation — by shifting
-   loads to midday — is the cheapest optimization.
-
-8. **Baseload is a fixed cost.** The always-on power floor (fridge, network,
-   standby) runs 24/7 regardless of price. Reducing it by even 50W saves
-   ~440 kWh/year.
-
-9. **Indoor temperature stability varies by room.** Well-insulated rooms
-   maintain tighter temperature ranges. Rooms with more external walls
-   show greater daily swings and faster response to outdoor changes.
-
-10. **Grid voltage constrains PV export.** During midday export peaks,
-    voltage can exceed 253V, triggering inverter curtailment. This is a
-    real-world PV clipping mechanism beyond inverter capacity limits.
-
-11. **Heating curve tuning is a free efficiency gain.** An over-steep heating
-    curve produces water temperatures higher than needed, directly reducing
-    COP. Each unnecessary degree of water temperature costs ~2-3% efficiency.
-
-12. **Rooms vary dramatically in thermal quality.** Cooling rates when the HP
-    cycles off differ by 2-3x between rooms, revealing insulation weak spots.
-    Targeting improvements at the worst rooms gives the highest ROI.
-
-13. **Short cycling at mild temperatures wastes energy.** When outdoor temps
-    are moderate, the HP may be oversized for the load, causing frequent
-    start/stop cycles that reduce COP and increase compressor wear.
-
-14. **DHW timing is a low-hanging optimization.** Shifting hot water heating
-    to the warmest hours of the day improves COP without any hardware changes.
-    The tank's heat loss rate determines how far ahead DHW can be pre-heated.
-
-15. **Wind increases heating cost beyond temperature alone.** Wind chill on
-    the evaporator coil reduces COP, and wind-driven infiltration increases
-    heating demand. Wind direction matters — exposed facades lose more heat.
+![Cooling Monthly](output/25_cooling_monthly.png)
 
 ---
 
-16. **Temperature reduction delivers measurable savings.** Each 1°C indoor
-    reduction saves ~4% of heating energy. Enforcing 21°C (vs current ~23°C)
-    saves ~7% — equivalent to ~61 PLN/season at spot prices.
+# Part VI — Indoor Climate
 
-17. **Cooling needs are modest today but grow sharply with warming.** Current
-    climate requires ~33 kWh/year to cool to 21°C. Under +4°C European
-    warming, this jumps to ~79 kWh — still manageable for a heat pump but
-    a new cost that didn't exist before.
+Comfort, moisture, and air quality across all monitored rooms.
 
-18. **Workshop batteries are feasible with minimal investment.** Light insulation
-    alone cuts no-charge days from 108 to 93. Adding battery waste heat (300W
-    during charging) eliminates discharge restrictions entirely and reduces
-    no-charge days to 17. A 50W heating pad brings it down to 12 days — just
-    2% of the year, concentrated in the coldest January/February weeks.
+## Thermal Comfort (ASHRAE)
 
-19. **Mold risk is zero in living spaces.** All heated rooms maintain dewpoint
-    margins well above the 3°C safety threshold. The workshop (unheated, 82% RH)
-    is the only space at risk — 64% of hours are within the condensation danger zone.
+ASHRAE Standard 55 comfort zone: 19-25°C, 30-70% RH. The dominant discomfort
+mode is overheating (21% of room-hours), not cold (3%):
 
-20. **Rooms run warm, not cold.** ASHRAE comfort analysis shows 21% of room-hours
-    are "too warm" (>25°C) while only 3% are "too cold." The dominant discomfort
-    mode is overheating, consistent with the heating curve audit (section 20).
+![Comfort Scatter](output/29_comfort_scatter.png)
 
-21. **Defrost cycles consume 14-17% of winter HP energy.** At temperatures below
-    -5°C, defrost frequency doubles. Total defrost energy: 302 kWh/year — a
-    significant overhead that worsens COP in the coldest weather.
+![Comfort Score](output/29_comfort_score.png)
 
-22. **DHW tank loses 55W continuously.** The thermal time constant of ~105 hours
-    means a 55°C tank cools to 40°C in ~59 hours. Annual standby loss costs ~384
-    PLN — a case for better insulation or smaller/on-demand DHW.
+![Comfort Daily](output/29_comfort_daily.png)
 
-23. **Pressure-driven heating signal is weak but real.** Falling pressure
-    correlates with ~10% higher HP demand. The effect is mostly mediated by the
-    associated temperature drop rather than direct pressure influence.
+## Mold Risk
 
-24. **Appliance solar coverage is moderate.** The washing machine already runs
-    37% on solar, the oven 21%. Shifting all runs to PV peak hours (10-14h)
-    could save ~35 PLN/year — modest but free.
+Dewpoint proximity analysis using the Magnus formula. All living spaces show
+zero risk. The workshop (unheated garage, 82% RH) has 64% of hours at risk —
+relevant for stored electronics and tools:
 
-25. **Noise-based occupancy detection shows always-occupied home.** Zero
-    unoccupied daytime periods detected — the occupants are consistently home,
-    eliminating setback thermostat savings as a viable strategy.
+![Mold Risk Ranking](output/27_mold_risk_ranking.png)
 
-26. **Self-sufficiency peaks at 47% in June, bottoms at 3% in December.** Overall
-    22.8% of hours need no grid power. A battery would push self-sufficiency
-    significantly higher, especially in shoulder months (March-April, September-October)
-    where daily PV surplus can cover evening demand.
+![Mold Risk Heatmap](output/27_mold_risk_heatmap.png)
+
+![Mold Risk Daily](output/27_mold_risk_daily.png)
+
+![Dewpoint vs Outdoor](output/27_dewpoint_vs_outdoor.png)
+
+## Air Quality
+
+CO2 by room reveals occupancy — bedroom peaks at night, living room in evening:
+
+![CO2 Daily Pattern](output/17_co2_daily_pattern.png)
+
+Noise levels track daily activity patterns:
+
+![Noise Pattern](output/17_noise_pattern.png)
+
+---
+
+# Part VII — Grid Infrastructure
+
+## Voltage & Power Quality
+
+Grid voltage varies by time of day. The 253V curtailment threshold matters
+for PV export:
+
+![Voltage Profile](output/18_voltage_profile.png)
+
+Per-circuit voltage comparison shows wiring voltage drop:
+
+![Circuit Voltage](output/18_circuit_voltage.png)
+
+Power factor below 90% indicates reactive power from HP compressor:
+
+![Power Factor](output/18_power_factor.png)
+
+Voltage rises during PV export — grid saturation indicator:
+
+![Voltage vs Export](output/18_voltage_vs_export.png)
+
+---
+
+# Conclusions
+
+**Solar sizing:**
+1. Hourly averages undersize everything. Peak power is 1.5-3x higher, and
+   winter drives the sizing requirement.
+2. Hidden PV exists in ~30% of "import" hours. Brief export bursts are
+   invisible in averaged data.
+3. Diminishing returns are real — the economically optimal battery/inverter
+   size is well below the technical maximum.
+
+**Energy economics:**
+4. Spot price timing matters. Clipping costs depend on *when*, not just how
+   much. PV self-consumption is the cheapest optimization lever.
+5. Self-sufficiency peaks at 47% in June with PV alone. A battery would push
+   shoulder months (March-April, September-October) significantly higher.
+6. Workshop battery storage is feasible with light insulation + waste heat,
+   losing only 12 no-charge days per year.
+
+**Heat pump:**
+7. Defrost cycles consume 14-17% of winter HP energy (302 kWh/year), doubling
+   below -5°C.
+8. DHW is the efficiency outlier — temperature lifts of 40-50°C vs 5-10°C for
+   space heating.
+9. Wind increases heating cost beyond temperature alone — measurable COP
+   reduction from evaporator wind chill.
+10. Short cycling at mild temperatures wastes energy. The HP may be oversized
+    for moderate-weather loads.
+
+**Building & comfort:**
+11. The heating curve is over-steep — rooms run warm (21% of hours >25°C). Each
+    unnecessary degree of water temperature costs ~2-3% COP.
+12. Room thermal quality varies 2-3x. Targeting the worst rooms gives the
+    highest insulation ROI.
+13. Each 1°C indoor reduction saves ~4% of heating energy. Enforcing 21°C saves
+    ~7% (~61 PLN/season).
+
+**DHW:**
+14. DHW tank standby loss is 55W (τ ≈ 105h), costing ~384 PLN/year. A case for
+    better insulation or on-demand DHW.
+15. Shifting DHW heating to warmest hours improves COP with zero hardware changes.
 
 ---
 
