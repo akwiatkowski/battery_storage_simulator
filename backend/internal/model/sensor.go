@@ -68,6 +68,16 @@ const (
 	SensorNetatmoLivingCO2      SensorType = "netatmo_living_co2"
 	SensorNetatmoLivingPressure SensorType = "netatmo_living_pressure"
 	SensorNetatmoLivingNoise    SensorType = "netatmo_living_noise"
+	// Netatmo outdoor module
+	SensorNetatmoOutdoorTemp    SensorType = "netatmo_outdoor_temp"
+	SensorNetatmoOutdoorHum     SensorType = "netatmo_outdoor_hum"
+	// Netatmo wind module
+	SensorNetatmoWindSpeed      SensorType = "netatmo_wind_speed"
+	SensorNetatmoWindAngle      SensorType = "netatmo_wind_angle"
+	SensorNetatmoGustSpeed      SensorType = "netatmo_gust_speed"
+	SensorNetatmoGustAngle      SensorType = "netatmo_gust_angle"
+	// Netatmo rain gauge
+	SensorNetatmoRain           SensorType = "netatmo_rain"
 	// Per-circuit voltage sensors
 	SensorVoltageOffice2     SensorType = "voltage_office2"
 	SensorVoltageExternal    SensorType = "voltage_external"
@@ -141,6 +151,16 @@ var SensorHomeAssistantID = map[SensorType]string{
 	SensorNetatmoLivingCO2:      "sensor.unknown_70_ee_50_a9_6a_b8_carbon_dioxide",
 	SensorNetatmoLivingPressure: "sensor.unknown_70_ee_50_a9_6a_b8_atmospheric_pressure",
 	SensorNetatmoLivingNoise:    "sensor.unknown_70_ee_50_a9_6a_b8_noise",
+	// Netatmo outdoor
+	SensorNetatmoOutdoorTemp:    "sensor.unknown_70_ee_50_a9_6a_b8_na_zewnatrz_temperature",
+	SensorNetatmoOutdoorHum:     "sensor.unknown_70_ee_50_a9_6a_b8_na_zewnatrz_humidity",
+	// Netatmo wind
+	SensorNetatmoWindSpeed:      "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_wind_speed",
+	SensorNetatmoWindAngle:      "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_wind_angle",
+	SensorNetatmoGustSpeed:      "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_gust_strength",
+	SensorNetatmoGustAngle:      "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_gust_angle",
+	// Netatmo rain
+	SensorNetatmoRain:           "sensor.unknown_70_ee_50_a9_6a_b8_deszcz_precipitation",
 	// Per-circuit voltage
 	SensorVoltageOffice2:     "sensor.beata_biurko_voltage",
 	SensorVoltageExternal:    "sensor.obciazenie_zewnetrzne_1_voltage",
@@ -230,6 +250,16 @@ var SensorCatalog = map[SensorType]SensorInfo{
 	SensorNetatmoLivingCO2:      {Name: "Living Room CO2", Unit: "ppm"},
 	SensorNetatmoLivingPressure: {Name: "Atmospheric Pressure", Unit: "mbar"},
 	SensorNetatmoLivingNoise:    {Name: "Living Room Noise", Unit: "dB"},
+	// Netatmo outdoor
+	SensorNetatmoOutdoorTemp:    {Name: "Netatmo Outdoor Temperature", Unit: "°C"},
+	SensorNetatmoOutdoorHum:     {Name: "Netatmo Outdoor Humidity", Unit: "%"},
+	// Netatmo wind
+	SensorNetatmoWindSpeed:      {Name: "Wind Speed", Unit: "km/h"},
+	SensorNetatmoWindAngle:      {Name: "Wind Angle", Unit: "°"},
+	SensorNetatmoGustSpeed:      {Name: "Wind Gust Speed", Unit: "km/h"},
+	SensorNetatmoGustAngle:      {Name: "Wind Gust Angle", Unit: "°"},
+	// Netatmo rain
+	SensorNetatmoRain:           {Name: "Precipitation", Unit: "mm"},
 	// Per-circuit voltage
 	SensorVoltageOffice2:     {Name: "Office 2 Voltage", Unit: "V"},
 	SensorVoltageExternal:    {Name: "External Circuit Voltage", Unit: "V"},

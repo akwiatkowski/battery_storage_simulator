@@ -90,6 +90,13 @@ NETATMO_LIVING_HUM     <- "sensor.unknown_70_ee_50_a9_6a_b8_humidity"
 NETATMO_LIVING_CO2     <- "sensor.unknown_70_ee_50_a9_6a_b8_carbon_dioxide"
 NETATMO_LIVING_PRESSURE <- "sensor.unknown_70_ee_50_a9_6a_b8_atmospheric_pressure"
 NETATMO_LIVING_NOISE   <- "sensor.unknown_70_ee_50_a9_6a_b8_noise"
+NETATMO_OUTDOOR_TEMP   <- "sensor.unknown_70_ee_50_a9_6a_b8_na_zewnatrz_temperature"
+NETATMO_OUTDOOR_HUM    <- "sensor.unknown_70_ee_50_a9_6a_b8_na_zewnatrz_humidity"
+NETATMO_WIND_SPEED     <- "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_wind_speed"
+NETATMO_WIND_ANGLE     <- "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_wind_angle"
+NETATMO_GUST_SPEED     <- "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_gust_strength"
+NETATMO_GUST_ANGLE     <- "sensor.unknown_70_ee_50_a9_6a_b8_wiatr_zachod_gust_angle"
+NETATMO_RAIN           <- "sensor.unknown_70_ee_50_a9_6a_b8_deszcz_precipitation"
 
 # Grid power quality sensors
 POWER_FACTOR_SENSOR    <- "sensor.0x943469fffed2bf71_power_factor"

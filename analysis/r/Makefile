@@ -21,7 +21,7 @@ SENTINELS := $(SCRIPTS:.R=.done)
 # Shared library files — if any change, all scripts re-run
 SHARED := R/load_data.R R/theme.R R/helpers.R
 
-.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18
+.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19
 
 all: $(SENTINELS)
 
@@ -51,6 +51,7 @@ scripts/%.done: scripts/%.R $(SHARED)
 16: scripts/16_hp_compressor.done
 17: scripts/17_air_quality.done
 18: scripts/18_voltage_power_quality.done
+19: scripts/19_workshop_thermal.done
 
 clean:
 	rm -rf output/ scripts/*.done

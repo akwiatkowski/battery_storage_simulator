@@ -35,7 +35,6 @@ docker-compose.override.yml
 .mise.local.toml
 
 # R analysis
-analysis/r/output/
 analysis/r/scripts/*.done
 .Rhistory
 .RData
