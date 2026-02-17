@@ -337,6 +337,144 @@ Voltage rises during PV export — a clear indicator of grid saturation:
 
 ---
 
+## 19. Workshop Thermal Response
+
+The unheated workshop's temperature follows outdoor conditions closely,
+revealing building envelope characteristics:
+
+![Workshop Time Series](output/19_workshop_timeseries.png)
+
+Thermal coupling analysis: slope < 1 means the building envelope provides
+some damping, but R² close to 1 means minimal independent temperature control:
+
+![Workshop Scatter](output/19_workshop_scatter.png)
+
+Cross-correlation reveals the thermal lag — how many hours for outdoor
+changes to propagate indoors:
+
+![Workshop Lag](output/19_workshop_lag.png)
+
+---
+
+## 20. Heating Curve Audit
+
+The heat pump uses a weather-compensating curve: outdoor temperature
+determines the target water supply temperature. A wrong curve wastes energy.
+
+![Heating Curve](output/20_heating_curve.png)
+
+Does the configured curve actually deliver indoor comfort? Room temperatures
+by outdoor temperature bin reveal over- or under-heating:
+
+![Curve vs Comfort](output/20_curve_vs_comfort.png)
+
+When and where is the curve wrong? The overheating map shows excess heat
+(red) or insufficient heat (blue) by hour and outdoor temperature:
+
+![Overheating Map](output/20_overheating_map.png)
+
+Higher water temperatures cost efficiency. The COP penalty for each degree
+of water temperature increase:
+
+![Curve Efficiency](output/20_curve_efficiency.png)
+
+---
+
+## 21. Room-by-Room Thermal Response
+
+How fast each room loses heat when the HP cycles off — a direct measure
+of insulation quality and thermal mass:
+
+![Cooling Rates](output/21_cooling_rates.png)
+
+Thermal inertia ranking — hours to lose 1°C. Higher = room holds heat
+longer and needs less frequent HP operation:
+
+![Thermal Inertia](output/21_thermal_inertia.png)
+
+Overnight temperature drop (22:00 → 06:00) reveals which rooms need the
+most heating recovery in the morning:
+
+![Night Drop](output/21_night_drop.png)
+
+Temperature uniformity across rooms — a wide spread means some rooms are
+over-heated while others are under-heated:
+
+![Uniformity](output/21_uniformity.png)
+
+---
+
+## 22. Heat Pump Cycling & Modulation
+
+Compressor speed distribution reveals whether the HP modulates smoothly
+or spends too much time at extremes:
+
+![Modulation Histogram](output/22_modulation_histogram.png)
+
+Short cycling detection — too many on/off transitions per day reduce COP
+and increase compressor wear:
+
+![Cycling Detection](output/22_cycling_detection.png)
+
+Defrost cycles identified by outside pipe temperature depression below
+outdoor air temperature:
+
+![Defrost Detection](output/22_defrost_detection.png)
+
+The part-load sweet spot — COP vs compressor speed at different outdoor
+temperatures reveals the optimal operating range:
+
+![Part-Load Sweet Spot](output/22_partload_sweetspot.png)
+
+---
+
+## 23. DHW Timing Optimization
+
+When does domestic hot water heating happen vs when COP is highest?
+Misalignment = wasted energy:
+
+![DHW Timing](output/23_dhw_timing.png)
+
+Tank heat loss rate during idle periods — steeper slope means the tank
+loses heat faster and needs more frequent reheating:
+
+![DHW Tank Loss](output/23_dhw_tank_loss.png)
+
+COP improvement potential: actual DHW timing vs optimal scheduling at
+best-COP hours of each day:
+
+![DHW COP Potential](output/23_dhw_cop_potential.png)
+
+DHW heating cost by hour and month — dark cells are the most expensive
+times to heat water:
+
+![DHW Cost Heatmap](output/23_dhw_cost_heatmap.png)
+
+---
+
+## 24. Wind Chill & Heat Loss
+
+Wind strips heat from the HP's outdoor evaporator coil, reducing COP.
+The effect is measurable even at moderate wind speeds:
+
+![Wind vs COP](output/24_wind_vs_cop.png)
+
+Wind direction matters — certain directions expose more building surface
+or the HP outdoor unit directly:
+
+![Wind Rose Heating](output/24_wind_rose_heating.png)
+
+Wind-driven indoor temperature deviation despite HP running:
+
+![Wind Indoor Effect](output/24_wind_indoor_effect.png)
+
+HP works harder in windy conditions — power consumption rises with wind
+speed even at the same outdoor temperature:
+
+![Wind Power Demand](output/24_wind_power_demand.png)
+
+---
+
 ## Conclusions
 
 1. **Hourly averages are not sufficient for system sizing.** Peak power is
@@ -379,7 +517,27 @@ Voltage rises during PV export — a clear indicator of grid saturation:
     voltage can exceed 253V, triggering inverter curtailment. This is a
     real-world PV clipping mechanism beyond inverter capacity limits.
 
+11. **Heating curve tuning is a free efficiency gain.** An over-steep heating
+    curve produces water temperatures higher than needed, directly reducing
+    COP. Each unnecessary degree of water temperature costs ~2-3% efficiency.
+
+12. **Rooms vary dramatically in thermal quality.** Cooling rates when the HP
+    cycles off differ by 2-3x between rooms, revealing insulation weak spots.
+    Targeting improvements at the worst rooms gives the highest ROI.
+
+13. **Short cycling at mild temperatures wastes energy.** When outdoor temps
+    are moderate, the HP may be oversized for the load, causing frequent
+    start/stop cycles that reduce COP and increase compressor wear.
+
+14. **DHW timing is a low-hanging optimization.** Shifting hot water heating
+    to the warmest hours of the day improves COP without any hardware changes.
+    The tank's heat loss rate determines how far ahead DHW can be pre-heated.
+
+15. **Wind increases heating cost beyond temperature alone.** Wind chill on
+    the evaporator coil reduces COP, and wind-driven infiltration increases
+    heating demand. Wind direction matters — exposed facades lose more heat.
+
 ---
 
-*Generated from `analysis/r/scripts/01-18`. Run `make -C analysis/r` to
+*Generated from `analysis/r/scripts/01-24`. Run `make -C analysis/r` to
 reproduce all charts.*
