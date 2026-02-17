@@ -21,7 +21,7 @@ SENTINELS := $(SCRIPTS:.R=.done)
 # Shared library files — if any change, all scripts re-run
 SHARED := R/load_data.R R/theme.R R/helpers.R
 
-.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37
 
 all: $(SENTINELS)
 
@@ -57,6 +57,19 @@ scripts/%.done: scripts/%.R $(SHARED)
 22: scripts/22_hp_cycling.done
 23: scripts/23_dhw_optimization.done
 24: scripts/24_wind_chill.done
+25: scripts/25_heating_savings.done
+26: scripts/26_battery_temperature.done
+27: scripts/27_mold_risk.done
+28: scripts/28_ventilation.done
+29: scripts/29_thermal_comfort.done
+30: scripts/30_auxiliary_heater.done
+31: scripts/31_defrost_analysis.done
+32: scripts/32_dhw_tank.done
+33: scripts/33_rain_pv.done
+34: scripts/34_pressure_heating.done
+35: scripts/35_appliance_pv.done
+36: scripts/36_noise_occupancy.done
+37: scripts/37_self_sufficiency.done
 
 clean:
 	rm -rf output/ scripts/*.done

@@ -37,9 +37,7 @@ temperature. Below 0°C, efficiency drops sharply.
 
 ![COP vs Temperature](output/01_cop_vs_temp.png)
 
-COP varies by month (seasonal temperature ranges) and time of day:
-
-![COP by Month](output/01_cop_by_month.png)
+COP varies by time of day (morning defrost periods vs afternoon):
 
 ![COP by Time of Day](output/01_cop_by_time.png)
 
@@ -475,6 +473,222 @@ speed even at the same outdoor temperature:
 
 ---
 
+## 25. Heating Savings & Cooling Projections
+
+How much heating energy each outdoor temperature contributes per month,
+at 0.1°C resolution:
+
+![Heating Energy Curve](output/25_heating_energy_curve.png)
+
+Weekly savings from reducing indoor temperature: -1°C, -2°C, -3°C, or
+enforcing a 21°C maximum:
+
+![Weekly Savings kWh](output/25_weekly_savings_kwh.png)
+
+![Weekly Savings PLN](output/25_weekly_savings_pln.png)
+
+Estimated cooling energy needed in summer (May–Sep) for different target
+temperatures. Right panel shows impact of +2.7°C global (+4°C European) warming:
+
+![Cooling Energy](output/25_cooling_energy.png)
+
+Monthly cooling breakdown — current climate vs global warming scenario:
+
+![Cooling Monthly](output/25_cooling_monthly.png)
+
+---
+
+## 26. Battery Temperature Feasibility
+
+Can batteries survive year-round in an unheated workshop (metal garage)?
+LFP batteries typically cannot charge below 0°C and cannot discharge below -10°C.
+
+The workshop's measured thermal damping (0.38) shows it already buffers outdoor
+extremes moderately. With light insulation (50mm foam), battery waste heat
+(~300W during charging), and an optional 50W heating pad, the picture improves
+dramatically.
+
+Annual daily minimum temperature under each scenario:
+
+![Battery Feasibility](output/26_battery_feasibility.png)
+
+Monthly count of days when the battery cannot charge (daily min < 0°C):
+
+![Battery Days Lost](output/26_battery_days_lost.png)
+
+How much PV surplus is actually lost because the battery is too cold to charge?
+Grey bars show total monthly PV surplus; colored bars show what's wasted:
+
+![Lost PV Surplus](output/26_lost_pv_surplus.png)
+
+---
+
+## 27. Mold Risk Assessment
+
+The Magnus formula converts temperature and relative humidity into a dewpoint.
+When the actual surface temperature approaches within 3°C of dewpoint, condensation
+risk rises — especially on thermal bridges (window frames, external wall corners).
+
+Room-by-room mold risk ranking shows which rooms come closest to condensation:
+
+![Mold Risk Ranking](output/27_mold_risk_ranking.png)
+
+The dewpoint proximity heatmap (hour × month) reveals seasonal and daily patterns:
+
+![Mold Risk Heatmap](output/27_mold_risk_heatmap.png)
+
+Daily pattern — when during the day is the risk highest?
+
+![Mold Risk Daily](output/27_mold_risk_daily.png)
+
+Dewpoint vs outdoor temperature — does outdoor cold drive indoor condensation risk?
+
+![Dewpoint vs Outdoor](output/27_dewpoint_vs_outdoor.png)
+
+---
+
+## 29. Thermal Comfort (ASHRAE)
+
+ASHRAE Standard 55 defines the comfort zone: 19-25°C and 30-70% RH. Every
+room-hour is classified as comfortable, too cold, too warm, too dry, or too humid.
+
+Temperature-humidity scatter per room with the comfort zone highlighted:
+
+![Comfort Scatter](output/29_comfort_scatter.png)
+
+Stacked comfort score per room — what fraction of time is each room comfortable?
+
+![Comfort Score](output/29_comfort_score.png)
+
+Daily comfort profile — when during the day are rooms most/least comfortable?
+
+![Comfort Daily](output/29_comfort_daily.png)
+
+---
+
+## 31. Defrost Energy Budget
+
+Heat pumps reverse the refrigerant cycle periodically to melt ice from the outdoor
+evaporator. This costs energy and produces zero useful heat. Defrost events are
+detected when the outside pipe temperature spikes above outdoor air temperature.
+
+Defrost frequency vs outdoor temperature — colder = more defrost:
+
+![Defrost by Temperature](output/31_defrost_by_temp.png)
+
+How long do defrost events last?
+
+![Defrost Duration](output/31_defrost_duration.png)
+
+Monthly defrost energy as a fraction of total HP consumption:
+
+![Defrost Monthly Energy](output/31_defrost_monthly_energy.png)
+
+Example day showing pipe temperature during defrost events:
+
+![Defrost Pipe Example](output/31_defrost_pipe_example.png)
+
+---
+
+## 32. DHW Tank Standby Loss
+
+The domestic hot water tank loses heat to its surroundings continuously. By fitting
+an exponential decay model to idle cooling periods, we measure the thermal time
+constant (τ) and standby power loss.
+
+One-week tank temperature profile with heating and idle periods:
+
+![DHW Tank Profile](output/32_dhw_tank_profile.png)
+
+Distribution of cooling rates during idle periods:
+
+![DHW Cooling Rate](output/32_dhw_cooling_rate.png)
+
+Reheat schedule model — how long until the tank reaches 40°C from different starting
+temperatures?
+
+![DHW Reheat Schedule](output/32_dhw_reheat_schedule.png)
+
+---
+
+## 34. Pressure Fronts & Heating Demand
+
+Atmospheric pressure changes signal incoming weather fronts. Falling pressure
+(low-pressure system approaching) often precedes cold, wet weather that increases
+heating demand.
+
+6-hour pressure change vs HP power consumption:
+
+![Pressure Change vs Heating](output/34_pressure_change_vs_heating.png)
+
+Cross-correlation at different time lags — does pressure predict heating demand?
+
+![Pressure Cross-Correlation](output/34_pressure_crosscorr.png)
+
+HP power by pressure regime (falling, stable, rising):
+
+![Pressure Regime Heating](output/34_pressure_regime_heating.png)
+
+---
+
+## 35. Appliance Timing vs PV Availability
+
+Do major appliances (washing machine, oven) run during solar hours? Shifting them
+to midday maximizes self-consumption.
+
+Appliance usage profile overlaid with PV generation:
+
+![Appliance Timing vs PV](output/35_appliance_timing_vs_pv.png)
+
+Solar coverage per appliance — what fraction already runs on sunshine?
+
+![Appliance Solar Coverage](output/35_appliance_solar_coverage.png)
+
+Potential savings from shifting all appliance runs to PV peak hours (10-14h):
+
+![Appliance Shift Savings](output/35_appliance_shift_savings.png)
+
+---
+
+## 36. Noise as Occupancy Proxy
+
+Indoor noise levels from the Netatmo sensor approximate occupancy: quiet (<35 dB)
+suggests empty rooms, active (>45 dB) suggests occupants.
+
+Daily noise pattern — weekday vs weekend:
+
+![Noise Daily Pattern](output/36_noise_daily_pattern.png)
+
+Grid consumption at different noise levels:
+
+![Noise vs Energy](output/36_noise_vs_energy.png)
+
+Heating during unoccupied periods — potential setback savings:
+
+![Unoccupied Heating](output/36_unoccupied_heating.png)
+
+---
+
+## 37. Self-Sufficiency Calendar
+
+A self-sufficient hour is one where the home draws no grid power (grid_power ≤ 0).
+This measures how much of the time the house could theoretically operate off-grid
+with current PV.
+
+Month × hour heatmap — green cells show self-sufficient hours:
+
+![Self-Sufficiency Heatmap](output/37_self_sufficiency_heatmap.png)
+
+Monthly self-sufficiency rate:
+
+![Self-Sufficiency Monthly](output/37_self_sufficiency_monthly.png)
+
+GitHub-style calendar — daily self-sufficiency rate (daytime hours only, 6-20h):
+
+![Self-Sufficiency Calendar](output/37_self_sufficiency_calendar.png)
+
+---
+
 ## Conclusions
 
 1. **Hourly averages are not sufficient for system sizing.** Peak power is
@@ -539,5 +753,55 @@ speed even at the same outdoor temperature:
 
 ---
 
-*Generated from `analysis/r/scripts/01-24`. Run `make -C analysis/r` to
+16. **Temperature reduction delivers measurable savings.** Each 1°C indoor
+    reduction saves ~4% of heating energy. Enforcing 21°C (vs current ~23°C)
+    saves ~7% — equivalent to ~61 PLN/season at spot prices.
+
+17. **Cooling needs are modest today but grow sharply with warming.** Current
+    climate requires ~33 kWh/year to cool to 21°C. Under +4°C European
+    warming, this jumps to ~79 kWh — still manageable for a heat pump but
+    a new cost that didn't exist before.
+
+18. **Workshop batteries are feasible with minimal investment.** Light insulation
+    alone cuts no-charge days from 108 to 93. Adding battery waste heat (300W
+    during charging) eliminates discharge restrictions entirely and reduces
+    no-charge days to 17. A 50W heating pad brings it down to 12 days — just
+    2% of the year, concentrated in the coldest January/February weeks.
+
+19. **Mold risk is zero in living spaces.** All heated rooms maintain dewpoint
+    margins well above the 3°C safety threshold. The workshop (unheated, 82% RH)
+    is the only space at risk — 64% of hours are within the condensation danger zone.
+
+20. **Rooms run warm, not cold.** ASHRAE comfort analysis shows 21% of room-hours
+    are "too warm" (>25°C) while only 3% are "too cold." The dominant discomfort
+    mode is overheating, consistent with the heating curve audit (section 20).
+
+21. **Defrost cycles consume 14-17% of winter HP energy.** At temperatures below
+    -5°C, defrost frequency doubles. Total defrost energy: 302 kWh/year — a
+    significant overhead that worsens COP in the coldest weather.
+
+22. **DHW tank loses 55W continuously.** The thermal time constant of ~105 hours
+    means a 55°C tank cools to 40°C in ~59 hours. Annual standby loss costs ~384
+    PLN — a case for better insulation or smaller/on-demand DHW.
+
+23. **Pressure-driven heating signal is weak but real.** Falling pressure
+    correlates with ~10% higher HP demand. The effect is mostly mediated by the
+    associated temperature drop rather than direct pressure influence.
+
+24. **Appliance solar coverage is moderate.** The washing machine already runs
+    37% on solar, the oven 21%. Shifting all runs to PV peak hours (10-14h)
+    could save ~35 PLN/year — modest but free.
+
+25. **Noise-based occupancy detection shows always-occupied home.** Zero
+    unoccupied daytime periods detected — the occupants are consistently home,
+    eliminating setback thermostat savings as a viable strategy.
+
+26. **Self-sufficiency peaks at 47% in June, bottoms at 3% in December.** Overall
+    22.8% of hours need no grid power. A battery would push self-sufficiency
+    significantly higher, especially in shoulder months (March-April, September-October)
+    where daily PV surplus can cover evening demand.
+
+---
+
+*Generated from `analysis/r/scripts/01-37`. Run `make -C analysis/r` to
 reproduce all charts.*
