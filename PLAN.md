@@ -123,7 +123,19 @@ Lower priority for Poland but useful for what-if analysis when considering large
 - No phase imbalance analysis (single voltage sensor available)
 - Makefile targets: `make voltage-analysis`
 
-## 12. Per-Appliance Cost Efficiency
+## 12. Room Temperature Stability Analysis (R)
+
+Analyze indoor temperature stability and thermal comfort using zone1_temp sensor data. Requires fetching zone1_temp into stats (hourly avg/min/max) for longer historical coverage.
+
+- **Daily min/max range**: how stable is indoor temperature? Plot daily temperature swing over time
+- **Thermal lag**: cross-correlate outdoor temp changes with indoor temp response — how many hours until the house "feels" a cold front?
+- **Seasonal comfort**: indoor temp distribution by season, identify under-heating/over-heating periods
+- **HP cycling**: overlay zone1_temp with HP consumption to visualize heat/coast cycles — how far does temp drop between HP runs?
+- **Insulation proxy**: rate of indoor temp decline when HP is off (°C/hour) as a function of outdoor temp — steeper decline = worse insulation
+
+Depends on: zone1_temp data in `input/stats/` (currently only available in legacy CSV with limited resolution)
+
+## 13. Per-Appliance Cost Efficiency
 
 Analyze how well each appliance's usage aligns with cheap/PV electricity.
 

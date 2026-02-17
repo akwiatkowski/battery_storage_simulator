@@ -6,7 +6,8 @@ export PATH := $(MISE_PATHS)$(PATH)
        install-frontend dev-frontend build-frontend test-frontend lint-frontend \
        dev test lint build clean compare train sample-predict fetch-prices load-analysis ha-fetch-history anomaly-detect voltage-analysis \
        docker-build docker-up docker-down \
-       sql-stats
+       sql-stats \
+       r-analysis r-clean
 
 # Backend
 run-backend:
@@ -119,6 +120,13 @@ docker-down:
 
 clean:
 	rm -rf bin/ tmp/ frontend/build/ frontend/.svelte-kit/
+
+# R analysis
+r-analysis:
+	$(MAKE) -C analysis/r
+
+r-clean:
+	$(MAKE) -C analysis/r clean
 
 # Print SQL query for fetching sensor statistics from Home Assistant DB
 sql-stats:
