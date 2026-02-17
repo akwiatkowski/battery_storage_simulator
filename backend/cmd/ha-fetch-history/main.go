@@ -37,6 +37,7 @@ func main() {
 	urlFlag := flag.String("url", "", "Home Assistant base URL (overrides HA_URL)")
 	tokenFlag := flag.String("token", "", "Long-lived access token (overrides HA_TOKEN)")
 	outputDir := flag.String("output", "input/recent", "Output directory for weekly CSV files")
+	sinceFlag := flag.String("since", "", "Force fetch from this date (YYYY-MM-DD), ignoring existing timestamps")
 	flag.Parse()
 
 	loadDotEnv(".env")
@@ -64,35 +65,49 @@ func main() {
 
 	var newRecords []record
 
-	// Backfill: fetch data before the earliest existing record
-	backfillStart := endTime.AddDate(-2, 0, 0) // 2 years back — HA returns empty for missing periods
-	if earliestTS > 0 {
-		backfillEnd := time.Unix(int64(earliestTS), 0).Add(1 * time.Minute)
-		if backfillStart.Before(backfillEnd) {
-			log.Printf("backfilling from %s to %s", backfillStart.Format("2006-01-02"), backfillEnd.Format("2006-01-02"))
-			backfill, err := fetchRange(client, haURL, haToken, backfillStart, backfillEnd, entityIDStr)
-			if err != nil {
-				log.Fatalf("backfill: %v", err)
-			}
-			newRecords = append(newRecords, backfill...)
+	// If -since is set, skip normal backfill/forward logic and fetch everything from that date
+	if *sinceFlag != "" {
+		sinceTime, err := time.ParseInLocation("2006-01-02", *sinceFlag, time.Now().Location())
+		if err != nil {
+			log.Fatalf("invalid -since date %q: %v", *sinceFlag, err)
 		}
-	}
-
-	// Forward: fetch new data from latest timestamp onward (or from 2 years ago on first run)
-	var startTime time.Time
-	if latestTS > 0 {
-		startTime = time.Unix(int64(latestTS), 0).Add(-1 * time.Minute)
-		log.Printf("fetching new data from %s", startTime.Format(time.RFC3339))
+		log.Printf("forced re-fetch from %s to %s", sinceTime.Format("2006-01-02"), endTime.Format("2006-01-02"))
+		fetched, err := fetchRange(client, haURL, haToken, sinceTime, endTime, entityIDStr)
+		if err != nil {
+			log.Fatalf("fetch: %v", err)
+		}
+		newRecords = fetched
 	} else {
-		startTime = backfillStart
-		log.Printf("first run — fetching all available data from %s", startTime.Format("2006-01-02"))
-	}
+		// Backfill: fetch data before the earliest existing record
+		backfillStart := endTime.AddDate(-2, 0, 0) // 2 years back — HA returns empty for missing periods
+		if earliestTS > 0 {
+			backfillEnd := time.Unix(int64(earliestTS), 0).Add(1 * time.Minute)
+			if backfillStart.Before(backfillEnd) {
+				log.Printf("backfilling from %s to %s", backfillStart.Format("2006-01-02"), backfillEnd.Format("2006-01-02"))
+				backfill, err := fetchRange(client, haURL, haToken, backfillStart, backfillEnd, entityIDStr)
+				if err != nil {
+					log.Fatalf("backfill: %v", err)
+				}
+				newRecords = append(newRecords, backfill...)
+			}
+		}
 
-	forward, err := fetchRange(client, haURL, haToken, startTime, endTime, entityIDStr)
-	if err != nil {
-		log.Fatalf("fetch: %v", err)
+		// Forward: fetch new data from latest timestamp onward (or from 2 years ago on first run)
+		var startTime time.Time
+		if latestTS > 0 {
+			startTime = time.Unix(int64(latestTS), 0).Add(-1 * time.Minute)
+			log.Printf("fetching new data from %s", startTime.Format(time.RFC3339))
+		} else {
+			startTime = backfillStart
+			log.Printf("first run — fetching all available data from %s", startTime.Format("2006-01-02"))
+		}
+
+		forward, err := fetchRange(client, haURL, haToken, startTime, endTime, entityIDStr)
+		if err != nil {
+			log.Fatalf("fetch: %v", err)
+		}
+		newRecords = append(newRecords, forward...)
 	}
-	newRecords = append(newRecords, forward...)
 
 	if len(newRecords) == 0 {
 		log.Printf("no new records fetched")
@@ -123,6 +138,27 @@ func main() {
 
 	log.Printf("wrote %d records across %d weekly files (had %d existing, fetched %d new)",
 		totalWritten, filesWritten, totalExisting, len(newRecords))
+
+	// Per-sensor summary
+	sensorCounts := make(map[string]int)
+	for _, r := range newRecords {
+		sensorCounts[r.sensorID]++
+	}
+	var sensorIDs []string
+	for sid := range sensorCounts {
+		sensorIDs = append(sensorIDs, sid)
+	}
+	sort.Strings(sensorIDs)
+	log.Printf("per-sensor breakdown (%d sensors with new data):", len(sensorIDs))
+	for _, sid := range sensorIDs {
+		name := sid
+		if st, ok := model.HAEntityToSensorType[sid]; ok {
+			if info, ok := model.SensorCatalog[st]; ok {
+				name = info.Name
+			}
+		}
+		log.Printf("  %-35s %5d records", name, sensorCounts[sid])
+	}
 }
 
 // loadDotEnv reads a .env file and sets variables not already in the environment.
