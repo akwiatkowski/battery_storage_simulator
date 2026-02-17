@@ -128,3 +128,21 @@ func (b *Bridge) OnLoadShiftStats(stats simulator.LoadShiftStats) {
 	}
 	b.hub.Broadcast(msg)
 }
+
+func (b *Bridge) OnHPDiagnostics(diag simulator.HPDiagnostics) {
+	msg, err := NewEnvelope(TypeHPDiagnostics, HPDiagnosticsFromEngine(diag))
+	if err != nil {
+		log.Printf("Error marshaling HP diagnostics: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}
+
+func (b *Bridge) OnPowerQuality(pq simulator.PowerQuality) {
+	msg, err := NewEnvelope(TypePowerQuality, PowerQualityFromEngine(pq))
+	if err != nil {
+		log.Printf("Error marshaling power quality: %v", err)
+		return
+	}
+	b.hub.Broadcast(msg)
+}

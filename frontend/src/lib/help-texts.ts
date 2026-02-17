@@ -437,5 +437,24 @@ export const helpTexts: Record<string, HelpEntry> = {
 		formula: 'Deviation = (Actual − Predicted) ÷ Predicted × 100%',
 		example: '+50% means 50% more grid import than predicted. −30% means 30% less.',
 		insight: 'Red (positive) means higher-than-expected consumption. Blue (negative) means lower. Only days with >20% deviation are shown.'
+	},
+
+	// ── HP Diagnostics ──
+	hp_diagnostics: {
+		title: 'Heat Pump Diagnostics',
+		description:
+			'Live diagnostic values from the Panasonic heat pump: COP, compressor speed, temperatures, refrigerant pressures, and calculated thermal power.',
+		formula: 'True Thermal Power = Pump Flow (L/min) × ΔT (°C) × 69.77 W',
+		example: 'Flow 12 L/min, inlet 30°C, outlet 35°C → ΔT=5°C → 12 × 5 × 69.77 = 4,186 W thermal output.',
+		insight: 'Higher COP at lower compressor speeds indicates efficient part-load operation. Discharge temp above 80°C suggests high-load conditions.'
+	},
+
+	// ── Power Quality ──
+	power_quality: {
+		title: 'Power Quality',
+		description:
+			'Grid voltage, power factor, and reactive power at the main meter. Voltage above 253V can trigger PV inverter curtailment.',
+		example: 'Voltage 248V with power factor 95% is healthy. Voltage 255V during midday PV export indicates grid saturation.',
+		insight: 'Power factor below 90% means significant reactive power draw, common with heat pumps and motors. High voltage during export reduces PV efficiency.'
 	}
 };

@@ -11,6 +11,8 @@ import {
 	MSG_HEATING_STATS,
 	MSG_ANOMALY_DAYS,
 	MSG_LOAD_SHIFT_STATS,
+	MSG_HP_DIAGNOSTICS,
+	MSG_POWER_QUALITY,
 	MSG_SIM_START,
 	MSG_SIM_PAUSE,
 	MSG_SIM_SET_SPEED,
@@ -32,6 +34,8 @@ import {
 	type HeatingMonthStatPayload,
 	type AnomalyDayPayload,
 	type LoadShiftStatsPayload,
+	type HPDiagnosticsPayload,
+	type PowerQualityPayload,
 	type PVArrayProdPayload,
 	type SensorInfo,
 	type Envelope
@@ -188,6 +192,12 @@ class SimulationStore {
 
 	// Load shift stats
 	loadShiftStats = $state<LoadShiftStatsPayload | null>(null);
+
+	// HP diagnostics
+	hpDiagnostics = $state<HPDiagnosticsPayload | null>(null);
+
+	// Power quality
+	powerQuality = $state<PowerQualityPayload | null>(null);
 
 	// PV array production
 	pvArrayProduction = $state<PVArrayProdPayload[]>([]);
@@ -479,6 +489,14 @@ class SimulationStore {
 			}
 			case MSG_LOAD_SHIFT_STATS: {
 				this.loadShiftStats = envelope.payload as LoadShiftStatsPayload;
+				break;
+			}
+			case MSG_HP_DIAGNOSTICS: {
+				this.hpDiagnostics = envelope.payload as HPDiagnosticsPayload;
+				break;
+			}
+			case MSG_POWER_QUALITY: {
+				this.powerQuality = envelope.payload as PowerQualityPayload;
 				break;
 			}
 			case MSG_DATA_LOADED: {

@@ -153,6 +153,30 @@ type AnomalyDayRecord struct {
 	AvgTempC     float64
 }
 
+// HPDiagnostics holds live heat pump diagnostic values.
+type HPDiagnostics struct {
+	COP             float64 `json:"cop"`
+	CompressorSpeed float64 `json:"compressor_speed_rpm"`
+	FanSpeed        float64 `json:"fan_speed_rpm"`
+	DischargeTemp   float64 `json:"discharge_temp_c"`
+	HighPressure    float64 `json:"high_pressure"`
+	PumpFlow        float64 `json:"pump_flow_lmin"`
+	InletTemp       float64 `json:"inlet_temp_c"`
+	OutletTemp      float64 `json:"outlet_temp_c"`
+	ThermalPowerW   float64 `json:"thermal_power_w"`
+	DHWTemp         float64 `json:"dhw_temp_c"`
+	OutsidePipeTemp float64 `json:"outside_pipe_temp_c"`
+	InsidePipeTemp  float64 `json:"inside_pipe_temp_c"`
+	Z1TargetTemp    float64 `json:"z1_target_temp_c"`
+}
+
+// PowerQuality holds live grid power quality values.
+type PowerQuality struct {
+	VoltageV         float64 `json:"voltage_v"`
+	PowerFactorPct   float64 `json:"power_factor_pct"`
+	ReactivePowerVAR float64 `json:"reactive_power_var"`
+}
+
 // LoadShiftStats holds load shifting analysis data sent to frontend.
 type LoadShiftStats struct {
 	Heatmap         [7][24]HeatmapCell `json:"heatmap"`
@@ -208,6 +232,8 @@ type Callback interface {
 	OnHeatingStats(stats []HeatingMonthStat)
 	OnAnomalyDays(records []AnomalyDayRecord)
 	OnLoadShiftStats(stats LoadShiftStats)
+	OnHPDiagnostics(diag HPDiagnostics)
+	OnPowerQuality(pq PowerQuality)
 }
 
 // Engine replays historical sensor data at configurable speed.
@@ -319,6 +345,27 @@ type Engine struct {
 	pvBaseProfile   *solar.PVProfile
 	pvArrays        []PVArrayConfig
 	pvArrayWh       []float64 // per-array production accumulators
+
+	// HP diagnostics snapshot values
+	hpDiagCOP             float64
+	hpDiagCompressorSpeed float64
+	hpDiagFanSpeed        float64
+	hpDiagDischargeTemp   float64
+	hpDiagHighPressure    float64
+	hpDiagPumpFlow        float64
+	hpDiagInletTemp       float64
+	hpDiagOutletTemp      float64
+	hpDiagDHWTemp         float64
+	hpDiagOutsidePipe     float64
+	hpDiagInsidePipe      float64
+	hpDiagZ1Target        float64
+	hpDiagDirty           bool
+
+	// Power quality snapshot values
+	pqVoltage       float64
+	pqPowerFactor   float64
+	pqReactivePower float64
+	pqDirty         bool
 
 	// Anomaly tracking (per-day during historical replay with prediction)
 	anomalyDays           []AnomalyDayRecord
@@ -710,6 +757,27 @@ func (e *Engine) resetAccumulators() {
 	// PV array accumulators reset
 	e.pvArrayWh = make([]float64, len(e.pvArrays))
 
+	// HP diagnostics reset
+	e.hpDiagCOP = 0
+	e.hpDiagCompressorSpeed = 0
+	e.hpDiagFanSpeed = 0
+	e.hpDiagDischargeTemp = 0
+	e.hpDiagHighPressure = 0
+	e.hpDiagPumpFlow = 0
+	e.hpDiagInletTemp = 0
+	e.hpDiagOutletTemp = 0
+	e.hpDiagDHWTemp = 0
+	e.hpDiagOutsidePipe = 0
+	e.hpDiagInsidePipe = 0
+	e.hpDiagZ1Target = 0
+	e.hpDiagDirty = false
+
+	// Power quality reset
+	e.pqVoltage = 0
+	e.pqPowerFactor = 0
+	e.pqReactivePower = 0
+	e.pqDirty = false
+
 	// Anomaly tracking reset
 	e.anomalyDays = nil
 	e.anomalyCurrentDay = ""
@@ -925,6 +993,9 @@ func (e *Engine) emitReadings(prevTime, currentTime, endTime time.Time) {
 				Unit:      r.Unit,
 				Timestamp: r.Timestamp.Format(time.RFC3339),
 			})
+
+			// Capture HP diagnostic and power quality snapshot values
+			e.captureDiagnosticSnapshot(r)
 
 			// Accumulate temperature for heating months and anomaly tracking
 			if r.Type == model.SensorPumpExtTemp {
@@ -1735,6 +1806,54 @@ func (e *Engine) broadcastSummary() {
 	if lsDirty {
 		e.callback.OnLoadShiftStats(loadShiftStats)
 	}
+
+	// Broadcast HP diagnostics if dirty
+	e.mu.Lock()
+	hpDirty := e.hpDiagDirty
+	var hpDiag HPDiagnostics
+	if hpDirty {
+		hpDiag = HPDiagnostics{
+			COP:             e.hpDiagCOP,
+			CompressorSpeed: e.hpDiagCompressorSpeed,
+			FanSpeed:        e.hpDiagFanSpeed,
+			DischargeTemp:   e.hpDiagDischargeTemp,
+			HighPressure:    e.hpDiagHighPressure,
+			PumpFlow:        e.hpDiagPumpFlow,
+			InletTemp:       e.hpDiagInletTemp,
+			OutletTemp:      e.hpDiagOutletTemp,
+			DHWTemp:         e.hpDiagDHWTemp,
+			OutsidePipeTemp: e.hpDiagOutsidePipe,
+			InsidePipeTemp:  e.hpDiagInsidePipe,
+			Z1TargetTemp:    e.hpDiagZ1Target,
+		}
+		// Compute true thermal power: flow (L/min) × ΔT (°C) × 69.77 W/(L/min·°C)
+		deltaT := e.hpDiagOutletTemp - e.hpDiagInletTemp
+		if deltaT > 0 && e.hpDiagPumpFlow > 0 {
+			hpDiag.ThermalPowerW = e.hpDiagPumpFlow * deltaT * 69.77
+		}
+		e.hpDiagDirty = false
+	}
+	e.mu.Unlock()
+	if hpDirty {
+		e.callback.OnHPDiagnostics(hpDiag)
+	}
+
+	// Broadcast power quality if dirty
+	e.mu.Lock()
+	pqDirtyFlag := e.pqDirty
+	var pq PowerQuality
+	if pqDirtyFlag {
+		pq = PowerQuality{
+			VoltageV:         e.pqVoltage,
+			PowerFactorPct:   e.pqPowerFactor,
+			ReactivePowerVAR: e.pqReactivePower,
+		}
+		e.pqDirty = false
+	}
+	e.mu.Unlock()
+	if pqDirtyFlag {
+		e.callback.OnPowerQuality(pq)
+	}
 }
 
 // buildLoadShiftStats computes load shift analysis from hourly accumulators.
@@ -1837,6 +1956,59 @@ func (e *Engine) finalizeAnomalyDay() {
 		AvgTempC:     avgTemp,
 	})
 	e.anomalyDirty = true
+}
+
+// captureDiagnosticSnapshot stores HP diagnostic and power quality values.
+func (e *Engine) captureDiagnosticSnapshot(r model.Reading) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	switch r.Type {
+	case model.SensorPumpCOP:
+		e.hpDiagCOP = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpCompressorSpeed:
+		e.hpDiagCompressorSpeed = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpFanSpeed:
+		e.hpDiagFanSpeed = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpDischargeTemp:
+		e.hpDiagDischargeTemp = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpHighPressure:
+		e.hpDiagHighPressure = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpFlow:
+		e.hpDiagPumpFlow = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpInletTemp:
+		e.hpDiagInletTemp = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpOutletTemp:
+		e.hpDiagOutletTemp = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpDHWTemp:
+		e.hpDiagDHWTemp = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpOutsidePipe:
+		e.hpDiagOutsidePipe = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpInsidePipeTemp:
+		e.hpDiagInsidePipe = r.Value
+		e.hpDiagDirty = true
+	case model.SensorPumpZ1TargetTemp:
+		e.hpDiagZ1Target = r.Value
+		e.hpDiagDirty = true
+	case model.SensorGridVoltage:
+		e.pqVoltage = r.Value
+		e.pqDirty = true
+	case model.SensorGridPowerFactor:
+		e.pqPowerFactor = r.Value
+		e.pqDirty = true
+	case model.SensorGridPowerReactive:
+		e.pqReactivePower = r.Value
+		e.pqDirty = true
+	}
 }
 
 func startOfDay(t time.Time) time.Time {

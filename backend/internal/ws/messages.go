@@ -127,6 +127,8 @@ const (
 	TypeHeatingStats          = "heating:stats"
 	TypeAnomalyDays           = "anomaly:days"
 	TypeLoadShiftStats        = "load_shift:stats"
+	TypeHPDiagnostics         = "hp:diagnostics"
+	TypePowerQuality          = "power:quality"
 )
 
 type SetPredictionPayload struct {
@@ -367,6 +369,58 @@ type LoadShiftStatsPayload struct {
 	ShiftOptimalPLN float64                     `json:"shift_optimal_pln"`
 	ShiftSavingsPLN float64                     `json:"shift_savings_pln"`
 	ShiftWindowH    int                         `json:"shift_window_h"`
+}
+
+// HP diagnostics payload
+
+type HPDiagnosticsPayload struct {
+	COP             float64 `json:"cop"`
+	CompressorSpeed float64 `json:"compressor_speed_rpm"`
+	FanSpeed        float64 `json:"fan_speed_rpm"`
+	DischargeTemp   float64 `json:"discharge_temp_c"`
+	HighPressure    float64 `json:"high_pressure"`
+	PumpFlow        float64 `json:"pump_flow_lmin"`
+	InletTemp       float64 `json:"inlet_temp_c"`
+	OutletTemp      float64 `json:"outlet_temp_c"`
+	ThermalPowerW   float64 `json:"thermal_power_w"`
+	DHWTemp         float64 `json:"dhw_temp_c"`
+	OutsidePipeTemp float64 `json:"outside_pipe_temp_c"`
+	InsidePipeTemp  float64 `json:"inside_pipe_temp_c"`
+	Z1TargetTemp    float64 `json:"z1_target_temp_c"`
+}
+
+func HPDiagnosticsFromEngine(d simulator.HPDiagnostics) HPDiagnosticsPayload {
+	return HPDiagnosticsPayload{
+		COP:             d.COP,
+		CompressorSpeed: d.CompressorSpeed,
+		FanSpeed:        d.FanSpeed,
+		DischargeTemp:   d.DischargeTemp,
+		HighPressure:    d.HighPressure,
+		PumpFlow:        d.PumpFlow,
+		InletTemp:       d.InletTemp,
+		OutletTemp:      d.OutletTemp,
+		ThermalPowerW:   d.ThermalPowerW,
+		DHWTemp:         d.DHWTemp,
+		OutsidePipeTemp: d.OutsidePipeTemp,
+		InsidePipeTemp:  d.InsidePipeTemp,
+		Z1TargetTemp:    d.Z1TargetTemp,
+	}
+}
+
+// Power quality payload
+
+type PowerQualityPayload struct {
+	VoltageV         float64 `json:"voltage_v"`
+	PowerFactorPct   float64 `json:"power_factor_pct"`
+	ReactivePowerVAR float64 `json:"reactive_power_var"`
+}
+
+func PowerQualityFromEngine(pq simulator.PowerQuality) PowerQualityPayload {
+	return PowerQualityPayload{
+		VoltageV:         pq.VoltageV,
+		PowerFactorPct:   pq.PowerFactorPct,
+		ReactivePowerVAR: pq.ReactivePowerVAR,
+	}
 }
 
 func LoadShiftStatsFromEngine(stats simulator.LoadShiftStats) LoadShiftStatsPayload {

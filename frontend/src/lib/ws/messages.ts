@@ -28,6 +28,8 @@ export const MSG_PREDICTION_COMPARISON = 'prediction:comparison';
 export const MSG_HEATING_STATS = 'heating:stats';
 export const MSG_ANOMALY_DAYS = 'anomaly:days';
 export const MSG_LOAD_SHIFT_STATS = 'load_shift:stats';
+export const MSG_HP_DIAGNOSTICS = 'hp:diagnostics';
+export const MSG_POWER_QUALITY = 'power:quality';
 
 export interface SetSpeedPayload {
 	speed: number;
@@ -222,4 +224,30 @@ export interface LoadShiftStatsPayload {
 	shift_optimal_pln: number;
 	shift_savings_pln: number;
 	shift_window_h: number;
+}
+
+// HP diagnostics
+
+export interface HPDiagnosticsPayload {
+	cop: number;
+	compressor_speed_rpm: number;
+	fan_speed_rpm: number;
+	discharge_temp_c: number;
+	high_pressure: number;
+	pump_flow_lmin: number;
+	inlet_temp_c: number;
+	outlet_temp_c: number;
+	thermal_power_w: number;
+	dhw_temp_c: number;
+	outside_pipe_temp_c: number;
+	inside_pipe_temp_c: number;
+	z1_target_temp_c: number;
+}
+
+// Power quality
+
+export interface PowerQualityPayload {
+	voltage_v: number;
+	power_factor_pct: number;
+	reactive_power_var: number;
 }

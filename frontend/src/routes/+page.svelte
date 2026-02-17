@@ -17,6 +17,8 @@
 	import LoadShiftAnalysis from '$lib/components/LoadShiftAnalysis.svelte';
 	import PVConfig from '$lib/components/PVConfig.svelte';
 	import AnomalyLog from '$lib/components/AnomalyLog.svelte';
+	import HPDiagnostics from '$lib/components/HPDiagnostics.svelte';
+	import PowerQuality from '$lib/components/PowerQuality.svelte';
 
 	onMount(() => {
 		simulation.init();
@@ -95,6 +97,8 @@
 		</div>
 	</div>
 
+	<PowerQuality />
+	<HPDiagnostics />
 	<PredictionComparison />
 	<HeatingAnalysis />
 	<LoadShiftAnalysis />

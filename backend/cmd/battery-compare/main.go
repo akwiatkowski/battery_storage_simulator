@@ -33,6 +33,8 @@ func (c *collector) OnPredictionComparison(simulator.PredictionComparison) {}
 func (c *collector) OnHeatingStats([]simulator.HeatingMonthStat)           {}
 func (c *collector) OnAnomalyDays([]simulator.AnomalyDayRecord)            {}
 func (c *collector) OnLoadShiftStats(simulator.LoadShiftStats)             {}
+func (c *collector) OnHPDiagnostics(simulator.HPDiagnostics)               {}
+func (c *collector) OnPowerQuality(simulator.PowerQuality)                 {}
 
 type result struct {
 	capacity float64

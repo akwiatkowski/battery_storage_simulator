@@ -259,6 +259,84 @@ shifting potential:
 
 ---
 
+## 15. Indoor Temperature Stability
+
+Room-by-room temperature comparison reveals which rooms are warmer or
+cooler, and how stable each room maintains temperature:
+
+![Room Temperature Comparison](output/15_room_temp_comparison.png)
+
+Daily temperature swing (max - min) per room shows stability — smaller
+swing means better thermal inertia or more consistent heating:
+
+![Daily Temperature Range](output/15_daily_temp_range.png)
+
+Indoor vs outdoor correlation shows thermal lag — how quickly the
+building responds to outdoor temperature changes:
+
+![Thermal Response](output/15_thermal_response.png)
+
+---
+
+## 16. Heat Pump Compressor Diagnostics
+
+Compressor speed vs COP demonstrates part-load efficiency — lower
+compressor speeds achieve higher COP:
+
+![Compressor vs COP](output/16_compressor_vs_cop.png)
+
+True thermal power calculated from flow × ΔT compared with the
+reported production sensor reveals measurement accuracy:
+
+![Thermal Power](output/16_thermal_power.png)
+
+The refrigerant cycle (discharge temperature vs high pressure, colored
+by COP) shows how hard the compressor is working:
+
+![Refrigerant Cycle](output/16_refrigerant_cycle.png)
+
+---
+
+## 17. Indoor Air Quality
+
+CO2 levels by room reveal occupancy patterns — bedroom peaks at night,
+living room in the evening:
+
+![CO2 Daily Pattern](output/17_co2_daily_pattern.png)
+
+Noise levels from the Netatmo sensor track daily activity:
+
+![Noise Pattern](output/17_noise_pattern.png)
+
+Atmospheric pressure trend correlates with weather fronts:
+
+![Pressure Trend](output/17_pressure_trend.png)
+
+---
+
+## 18. Voltage & Power Quality
+
+Grid voltage varies by time of day — higher at night (low demand),
+dipping during peak hours. The 253V curtailment threshold matters for PV:
+
+![Voltage Profile](output/18_voltage_profile.png)
+
+Per-circuit voltage comparison shows wiring voltage drop from the meter
+to each outlet:
+
+![Circuit Voltage](output/18_circuit_voltage.png)
+
+Power factor below 90% indicates significant reactive power, common with
+heat pump compressor operation:
+
+![Power Factor](output/18_power_factor.png)
+
+Voltage rises during PV export — a clear indicator of grid saturation:
+
+![Voltage vs Export](output/18_voltage_vs_export.png)
+
+---
+
 ## Conclusions
 
 1. **Hourly averages are not sufficient for system sizing.** Peak power is
@@ -293,7 +371,15 @@ shifting potential:
    standby) runs 24/7 regardless of price. Reducing it by even 50W saves
    ~440 kWh/year.
 
+9. **Indoor temperature stability varies by room.** Well-insulated rooms
+   maintain tighter temperature ranges. Rooms with more external walls
+   show greater daily swings and faster response to outdoor changes.
+
+10. **Grid voltage constrains PV export.** During midday export peaks,
+    voltage can exceed 253V, triggering inverter curtailment. This is a
+    real-world PV clipping mechanism beyond inverter capacity limits.
+
 ---
 
-*Generated from `analysis/r/scripts/01-14`. Run `make -C analysis/r` to
+*Generated from `analysis/r/scripts/01-18`. Run `make -C analysis/r` to
 reproduce all charts.*

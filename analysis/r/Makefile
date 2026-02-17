@@ -1,7 +1,7 @@
 # analysis/r/Makefile — Run all R analysis scripts
 #
 # Usage:
-#   make            # run all 14 scripts
+#   make            # run all 18 scripts
 #   make 03         # run just script 03
 #   make clean      # remove all generated output
 #
@@ -21,7 +21,7 @@ SENTINELS := $(SCRIPTS:.R=.done)
 # Shared library files — if any change, all scripts re-run
 SHARED := R/load_data.R R/theme.R R/helpers.R
 
-.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14
+.PHONY: all clean 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18
 
 all: $(SENTINELS)
 
@@ -47,6 +47,10 @@ scripts/%.done: scripts/%.R $(SHARED)
 12: scripts/12_pv_self_consumption.done
 13: scripts/13_baseload.done
 14: scripts/14_load_shifting.done
+15: scripts/15_indoor_temperature.done
+16: scripts/16_hp_compressor.done
+17: scripts/17_air_quality.done
+18: scripts/18_voltage_power_quality.done
 
 clean:
 	rm -rf output/ scripts/*.done

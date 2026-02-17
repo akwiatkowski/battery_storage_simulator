@@ -50,6 +50,59 @@ WASHING_SENSOR  <- "sensor.pralka_z2m_power"
 OVEN_SENSOR     <- "sensor.piekarnik_z2m_power"
 DRIER_SENSOR    <- "sensor.70_power"
 
+# HP diagnostic sensors
+HP_COP_SENSOR          <- "sensor.panasonic_heat_pump_cop"
+HP_COMPRESSOR_SPEED    <- "sensor.panasonic_heat_pump_main_pump_speed"
+HP_FAN_SPEED           <- "sensor.panasonic_heat_pump_main_fan1_motor_speed"
+HP_HIGH_PRESSURE       <- "sensor.panasonic_heat_pump_main_high_pressure"
+HP_DISCHARGE_TEMP      <- "sensor.panasonic_heat_pump_main_discharge_temp"
+HP_PUMP_FLOW           <- "sensor.panasonic_heat_pump_main_pump_flow"
+HP_DHW_TEMP            <- "sensor.panasonic_heat_pump_main_dhw_temp"
+HP_Z1_TARGET_TEMP      <- "sensor.panasonic_heat_pump_main_z1_water_target_temp"
+HP_INSIDE_PIPE_TEMP    <- "sensor.panasonic_heat_pump_main_inside_pipe_temp"
+HP_OUTSIDE_PIPE_TEMP   <- "sensor.panasonic_heat_pump_main_outside_pipe_temp"
+HP_HEATER_ROOM_HOURS   <- "sensor.panasonic_heat_pump_main_room_heater_operations_hours"
+HP_HEATER_DHW_HOURS    <- "sensor.panasonic_heat_pump_main_dhw_heater_operations_hours"
+
+# Indoor climate sensors
+TEMP_BEDROOM1   <- "sensor.lozeczko_zosii_z2m_temperature"
+HUM_BEDROOM1    <- "sensor.lozeczko_zosii_z2m_humidity"
+TEMP_BEDROOM2   <- "sensor.temperatura_pokoj_zosi_temperature"
+HUM_BEDROOM2    <- "sensor.temperatura_pokoj_zosi_humidity"
+TEMP_KITCHEN    <- "sensor.temperatura_w_kuchni_temperature"
+HUM_KITCHEN     <- "sensor.temperatura_w_kuchni_humidity"
+TEMP_OFFICE1    <- "sensor.termometr_olek_z2m_temperature"
+HUM_OFFICE1     <- "sensor.termometr_olek_z2m_humidity"
+TEMP_OFFICE2    <- "sensor.termometr_beata_z2m_temperature"
+HUM_OFFICE2     <- "sensor.termometr_beata_z2m_humidity"
+TEMP_BATHROOM   <- "sensor.termometr_lazienka_gorna_z2m_temperature"
+HUM_BATHROOM    <- "sensor.termometr_lazienka_gorna_z2m_humidity"
+TEMP_WORKSHOP   <- "sensor.warsztat_termometr_temperature"
+HUM_WORKSHOP    <- "sensor.warsztat_termometr_humidity"
+TEMP_WORKSHOP_EXT <- "sensor.warsztat_zewnatrz_termometr_temperature"
+
+# Netatmo sensors
+NETATMO_BEDROOM_TEMP   <- "sensor.unknown_70_ee_50_a9_6a_b8_sypialnia_temperature"
+NETATMO_BEDROOM_HUM    <- "sensor.unknown_70_ee_50_a9_6a_b8_sypialnia_humidity"
+NETATMO_BEDROOM_CO2    <- "sensor.unknown_70_ee_50_a9_6a_b8_sypialnia_carbon_dioxide"
+NETATMO_LIVING_TEMP    <- "sensor.unknown_70_ee_50_a9_6a_b8_temperature"
+NETATMO_LIVING_HUM     <- "sensor.unknown_70_ee_50_a9_6a_b8_humidity"
+NETATMO_LIVING_CO2     <- "sensor.unknown_70_ee_50_a9_6a_b8_carbon_dioxide"
+NETATMO_LIVING_PRESSURE <- "sensor.unknown_70_ee_50_a9_6a_b8_atmospheric_pressure"
+NETATMO_LIVING_NOISE   <- "sensor.unknown_70_ee_50_a9_6a_b8_noise"
+
+# Grid power quality sensors
+POWER_FACTOR_SENSOR    <- "sensor.0x943469fffed2bf71_power_factor"
+REACTIVE_POWER_SENSOR  <- "sensor.0x943469fffed2bf71_power_reactive"
+REACTIVE_ENERGY_SENSOR <- "sensor.0x943469fffed2bf71_energy_reactive"
+
+# Per-circuit voltage sensors
+VOLTAGE_OFFICE1  <- "sensor.olek_tylne_cieple_oswietlenie_voltage"
+VOLTAGE_OFFICE2  <- "sensor.beata_biurko_voltage"
+VOLTAGE_EXTERNAL <- "sensor.obciazenie_zewnetrzne_1_voltage"
+VOLTAGE_LIVING_LAMP  <- "sensor.salon_oswietlenie_w_szafie_podschodowe_voltage"
+VOLTAGE_LIVING_MEDIA <- "sensor.salon_tv_i_media_voltage"
+
 # ============================================================================
 # Generic legacy CSV loader
 # ============================================================================
