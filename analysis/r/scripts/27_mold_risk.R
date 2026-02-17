@@ -97,11 +97,21 @@ if (nrow(room_data) < 20) {
   quit(save = "no")
 }
 
+# Workshop is an unheated metal garage — not a living space.
+# Separate it so it doesn't skew indoor room averages.
+indoor_data   <- room_data |> filter(room != "Workshop")
+workshop_data <- room_data |> filter(room == "Workshop")
+has_workshop  <- nrow(workshop_data) >= 20
+
 # ============================================================================
 # Chart 1: Dewpoint proximity heatmap — room x month, % hours at risk
 # ============================================================================
 monthly_risk <- room_data |>
-  mutate(month = month(hour_bucket, label = TRUE)) |>
+  mutate(
+    month = month(hour_bucket, label = TRUE),
+    # Tag workshop distinctly in the y-axis label
+    room = if_else(room == "Workshop", "Workshop (garage)", room)
+  ) |>
   group_by(room, month) |>
   summarize(
     pct_risk = mean(at_risk, na.rm = TRUE) * 100,
@@ -143,6 +153,7 @@ save_plot(p1, "27_mold_risk_heatmap.png", width = 11, height = 6)
 # Chart 2: Worst-case room ranking — total mold risk hours
 # ============================================================================
 risk_ranking <- room_data |>
+  mutate(room = if_else(room == "Workshop", "Workshop (garage)", room)) |>
   group_by(room) |>
   summarize(
     risk_hours = sum(at_risk, na.rm = TRUE),
@@ -173,9 +184,11 @@ p2 <- ggplot(risk_ranking, aes(x = reorder(room, risk_hours), y = risk_hours)) +
 save_plot(p2, "27_mold_risk_ranking.png")
 
 # ============================================================================
-# Chart 3: Daily pattern — hour-of-day mold risk profile (avg across rooms)
+# Chart 3: Daily pattern — hour-of-day mold risk profile (indoor rooms only)
 # ============================================================================
-hourly_risk <- room_data |>
+# Workshop excluded — its 64% risk rate would dominate the average and
+# obscure the much lower (but actionable) risk in living spaces.
+hourly_risk <- indoor_data |>
   mutate(hour = hour(hour_bucket)) |>
   group_by(hour) |>
   summarize(
@@ -183,18 +196,36 @@ hourly_risk <- room_data |>
     .groups = "drop"
   )
 
+# If workshop data exists, compute its daily pattern for comparison
+if (has_workshop) {
+  hourly_workshop <- workshop_data |>
+    mutate(hour = hour(hour_bucket)) |>
+    group_by(hour) |>
+    summarize(
+      pct_risk = mean(at_risk, na.rm = TRUE) * 100,
+      .groups = "drop"
+    )
+}
+
 p3 <- ggplot(hourly_risk, aes(x = hour, y = pct_risk)) +
   geom_area(fill = COLORS$import, alpha = 0.25) +
-  geom_line(color = COLORS$import, linewidth = 1.2) +
+  geom_line(aes(linetype = "Indoor rooms"), color = COLORS$import, linewidth = 1.2) +
   geom_point(color = COLORS$import, size = 2) +
+  {if (has_workshop) list(
+    geom_line(data = hourly_workshop, aes(linetype = "Workshop (garage)"),
+              color = COLORS$muted, linewidth = 1),
+    geom_point(data = hourly_workshop, color = COLORS$muted, size = 1.5, shape = 17)
+  )} +
+  scale_linetype_manual(values = c("Indoor rooms" = "solid", "Workshop (garage)" = "dashed"),
+                        name = "") +
   scale_x_continuous(breaks = seq(0, 23, 3)) +
   labs(
     x     = "Hour of Day",
     y     = "% of Room-Hours at Risk",
     title = "Mold Risk: Daily Pattern",
     subtitle = paste0(
-      "Average across all rooms. Morning peak expected — overnight cooling ",
-      "drops surface temps while humidity stays high."
+      "Indoor rooms (solid) vs workshop garage (dashed). ",
+      "Morning peak expected — overnight cooling drops surface temps."
     )
   ) +
   theme_energy()
@@ -216,8 +247,8 @@ if (nrow(outdoor) < 20) {
 }
 
 if (nrow(outdoor) >= 20) {
-  # Compute average indoor dewpoint per hour (across all rooms)
-  avg_dewpoint <- room_data |>
+  # Compute average indoor dewpoint per hour (indoor rooms only, not workshop)
+  avg_dewpoint <- indoor_data |>
     group_by(hour_bucket) |>
     summarize(
       avg_dp = mean(dp, na.rm = TRUE),
