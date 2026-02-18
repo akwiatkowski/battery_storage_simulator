@@ -27,6 +27,14 @@ models:
       min_child_samples: 20
   pv: {}
   consumption: {}
-  heat_pump: {}
+  heat_pump:
+    resolution: 6h
+    heating_threshold_c: 15
+    test_days: 90
+    params:
+      n_estimators: 500
+      learning_rate: 0.03
+      num_leaves: 15
+      min_child_samples: 30
   dhw: {}
   spot_price: {}

@@ -13,12 +13,13 @@
     "is_holiday",
     "temperature",
     "wind_speed",
-    "cloud_cover"
+    "cloud_cover",
+    "humidity"
   ],
   "train_metrics": {
-    "mae": 326.28642415796327,
-    "rmse": 425.8580613544661,
-    "r2": 0.24141826741281636
+    "mae": 327.26332680670055,
+    "rmse": 426.7116696724562,
+    "r2": 0.23837415151654484
   },
   "params": {
     "n_estimators": 500,
@@ -26,5 +27,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 21
+  "n_estimators_actual": 20,
+  "test_metrics": {
+    "mae": 424.9179671290042,
+    "rmse": 558.2077936573302,
+    "r2": 0.02121275535784961
+  }
 }

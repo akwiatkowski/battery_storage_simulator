@@ -1,28 +1,39 @@
 {
   "type": "lightgbm",
   "feature_names": [
-    "hour_sin",
-    "hour_cos",
-    "month_sin",
-    "month_cos",
     "day_of_year_sin",
     "day_of_year_cos",
     "temperature",
     "wind_speed",
     "cloud_cover",
+    "humidity",
+    "wind_chill",
+    "heating_degree_hour",
+    "heating_degree_sq",
     "temp_derivative",
-    "is_daylight"
+    "temp_lag_6h",
+    "temp_lag_12h",
+    "solar_radiation",
+    "temp_min",
+    "hp_lag_1",
+    "hp_lag_1d",
+    "hp_rolling_1d"
   ],
   "train_metrics": {
-    "mae": 59.854377921527565,
-    "rmse": 100.930260022188,
-    "r2": 0.7769400864099496
+    "mae": 17.415378078392543,
+    "rmse": 28.588831123426747,
+    "r2": 0.9702328301222163
   },
   "params": {
     "n_estimators": 500,
-    "learning_rate": 0.05,
-    "num_leaves": 31,
-    "min_child_samples": 20
+    "learning_rate": 0.03,
+    "num_leaves": 15,
+    "min_child_samples": 30
   },
-  "n_estimators_actual": 187
+  "n_estimators_actual": 372,
+  "test_metrics": {
+    "mae": 101.2630849653789,
+    "rmse": 155.53341139566731,
+    "r2": 0.67855168861473
+  }
 }

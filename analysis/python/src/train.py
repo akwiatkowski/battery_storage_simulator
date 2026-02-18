@@ -1,6 +1,7 @@
 """Unified training CLI: python -m analysis.python.src.train --model pv"""
 
 import argparse
+import json
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,36 @@ PREPARE_FUNCTIONS = {
 }
 
 
+def _load_baseline_metrics(model_path: str) -> dict | None:
+    """Load test metrics from existing model JSON, if available."""
+    meta_path = Path(f"{model_path}.json")
+    if not meta_path.exists():
+        return None
+    try:
+        with open(meta_path) as f:
+            meta = json.load(f)
+        return meta.get("test_metrics")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _print_comparison(model_name: str, old: dict, new: dict) -> None:
+    """Print before/after comparison table."""
+    print(f"\n  === {model_name}: Before vs After ===")
+    print(f"  {'Metric':<10} {'Old':>10} {'New':>10} {'Delta':>20}")
+    print(f"  {'-' * 52}")
+    for key, fmt in [("mae", ".2f"), ("rmse", ".2f"), ("r2", ".3f")]:
+        old_val = old.get(key, 0)
+        new_val = new.get(key, 0)
+        delta = new_val - old_val
+        if key == "r2":
+            delta_str = f"{delta:+.3f}"
+        else:
+            pct = (delta / old_val * 100) if old_val != 0 else 0
+            delta_str = f"{delta:+{fmt}}  ({pct:+.1f}%)"
+        print(f"  {key.upper():<10} {old_val:>{fmt}} {new_val:>{fmt}} {delta_str:>20}")
+
+
 def train_model(model_name: str, config: dict) -> None:
     """Train a single model by name."""
     if model_name not in PREPARE_FUNCTIONS:
@@ -39,6 +70,10 @@ def train_model(model_name: str, config: dict) -> None:
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Training {model_name} model ===")
+
+    # Load baseline metrics from existing model (before overwriting)
+    model_path = str(out_dir / f"{model_name}_model")
+    baseline_metrics = _load_baseline_metrics(model_path)
 
     # Prepare dataset
     prepare_fn = PREPARE_FUNCTIONS[model_name]
@@ -71,9 +106,23 @@ def train_model(model_name: str, config: dict) -> None:
     print(f"\n  Train — MAE: {train_metrics['mae']:.2f}  RMSE: {train_metrics['rmse']:.2f}  R²: {train_metrics['r2']:.4f}")
     print(f"  Test  — MAE: {test_metrics['mae']:.2f}  RMSE: {test_metrics['rmse']:.2f}  R²: {test_metrics['r2']:.4f}")
 
+    # Print comparison if baseline exists
+    if baseline_metrics:
+        _print_comparison(model_name, baseline_metrics, test_metrics)
+    else:
+        print("\n  (No previous model found — skipping comparison)")
+
     # Save model
-    model_path = str(out_dir / f"{model_name}_model")
     model.save(model_path)
+
+    # Append test_metrics to saved JSON
+    meta_path = Path(f"{model_path}.json")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["test_metrics"] = test_metrics
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
     print(f"\n  Model saved: {model_path}.joblib")
 
     # Feature importance plot

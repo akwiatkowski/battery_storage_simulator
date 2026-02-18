@@ -100,13 +100,15 @@ def _add_behavioral_time_features(df: pd.DataFrame, config: dict) -> None:
 
 
 def _add_weather_features(df: pd.DataFrame) -> None:
-    """Add temperature, wind_speed, cloud_cover from weather columns (in-place).
+    """Add temperature, wind_speed, cloud_cover, humidity from weather columns (in-place).
 
-    Expects raw weather column names (temperature_2m, wind_speed_10m, cloud_cover).
+    Expects raw weather column names (temperature_2m, wind_speed_10m, cloud_cover,
+    relative_humidity_2m).
     """
     df["temperature"] = df["temperature_2m"].ffill()
     df["wind_speed"] = df["wind_speed_10m"].fillna(0)
     df["cloud_cover"] = df["cloud_cover"].fillna(50)
+    df["humidity"] = df["relative_humidity_2m"].fillna(50)
 
 
 def _load_weather(config: dict, start_date: date, end_date: date) -> pd.DataFrame:
@@ -261,6 +263,7 @@ def build_consumption_features(weather_df: pd.DataFrame, config: dict) -> pd.Dat
         "day_of_week_sin", "day_of_week_cos",
         "is_weekend", "is_holiday",
         "temperature", "wind_speed", "cloud_cover",
+        "humidity",
     ]
     return df[feature_cols]
 
@@ -355,6 +358,24 @@ def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFra
     # Temperature derivative: change over previous 3 hours
     df["temp_derivative"] = df["temperature"].diff(3).fillna(0)
 
+    # Wind chill interaction: wind amplifies heat loss from building
+    df["wind_chill"] = df["temperature"] * df["wind_speed"]
+
+    # Heating degree hour: standard proxy for heating demand
+    df["heating_degree_hour"] = (18.0 - df["temperature"]).clip(lower=0)
+
+    # Squared heating degree: nonlinear heat loss at extreme cold
+    df["heating_degree_sq"] = df["heating_degree_hour"] ** 2
+
+    # Longer temperature history
+    df["temp_lag_6h"] = df["temperature"].shift(6).ffill().bfill()
+    df["temp_lag_12h"] = df["temperature"].shift(12).ffill().bfill()
+
+    # Solar radiation: passive solar gains reduce heating demand
+    df["solar_radiation"] = (
+        df["direct_radiation"].fillna(0) + df["diffuse_radiation"].fillna(0)
+    )
+
     # Solar elevation for is_daylight
     df["is_daylight"] = pd.Series(
         [1 if solar_elevation(loc["latitude"], loc["longitude"], ts) > 0 else 0
@@ -367,15 +388,24 @@ def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFra
         "month_sin", "month_cos",
         "day_of_year_sin", "day_of_year_cos",
         "temperature", "wind_speed", "cloud_cover",
-        "temp_derivative", "is_daylight",
+        "humidity", "wind_chill", "heating_degree_hour", "heating_degree_sq",
+        "temp_derivative", "temp_lag_6h", "temp_lag_12h",
+        "solar_radiation", "is_daylight",
     ]
     return df[feature_cols]
 
 
 def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
-    """Prepare heat pump heating dataset."""
+    """Prepare heat pump heating dataset.
+
+    Supports configurable resolution via config["models"]["heat_pump"]["resolution"].
+    Values: "1h" (default), "6h", "12h", "24h". Coarser resolutions smooth out
+    HP cycling noise and focus on underlying heating demand.
+    """
     root = project_root()
     sensor_id = config["sensors"]["hp_heating"]
+    model_cfg = config["models"].get("heat_pump", {})
+    resolution = model_cfg.get("resolution", "1h")
 
     hp_df = load_sensor_data(
         sensor_id=sensor_id,
@@ -386,6 +416,7 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
         raise ValueError(f"No HP heating data found for sensor {sensor_id}")
 
     print(f"  HP heating readings: {len(hp_df)}")
+    print(f"  Resolution: {resolution}")
 
     hp_df = hp_df.set_index("timestamp")
     hp_df.index = hp_df.index.tz_convert("UTC")
@@ -401,11 +432,49 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
 
     features = build_heating_features(weather_df, config)
 
-    # Join
+    # Join at hourly resolution
     target = hp_hourly
     target.name = "hp_heat_w"
     joined = features.join(target, how="inner")
     joined["hp_heat_w"] = joined["hp_heat_w"].fillna(0)
+
+    # Aggregate to desired resolution
+    if resolution != "1h":
+        # Save temperature for min aggregation (min temp drives peak demand)
+        temp_hourly = joined["temperature"]
+
+        joined = joined.resample(resolution).mean()
+        joined["temp_min"] = temp_hourly.resample(resolution).min()
+
+        # Drop features that lose meaning at coarser resolutions
+        drop_cols = []
+        if resolution in ("24h", "D"):
+            drop_cols += ["hour_sin", "hour_cos", "is_daylight",
+                          "temp_derivative", "temp_lag_6h", "temp_lag_12h"]
+        if resolution in ("6h", "12h", "24h", "D"):
+            # Low importance at 6h+: hour cyclicals and month cyclicals
+            drop_cols += ["hour_sin", "hour_cos", "is_daylight",
+                          "month_sin", "month_cos"]
+        if drop_cols:
+            joined = joined.drop(columns=list(set(drop_cols)), errors="ignore")
+
+        joined = joined.dropna()
+        print(f"  Samples at {resolution}: {len(joined)}")
+
+    # Lagged target features (at final resolution — captures heating momentum)
+    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
+    ppd = periods_per_day.get(resolution, 24)
+    joined["hp_lag_1"] = joined["hp_heat_w"].shift(1)        # previous period
+    joined["hp_lag_1d"] = joined["hp_heat_w"].shift(ppd)     # same period yesterday
+    joined["hp_rolling_1d"] = joined["hp_heat_w"].rolling(ppd, min_periods=1).mean()  # 24h rolling avg
+    joined = joined.dropna()
+
+    # Filter to heating conditions only (removes summer with HP=0)
+    heating_threshold = model_cfg.get("heating_threshold_c")
+    if heating_threshold is not None:
+        before = len(joined)
+        joined = joined[joined["temperature"] <= heating_threshold]
+        print(f"  Filtered to temp <= {heating_threshold}°C: {len(joined)} (dropped {before - len(joined)} warm samples)")
 
     X = joined.drop(columns=["hp_heat_w"])
     y = joined["hp_heat_w"]

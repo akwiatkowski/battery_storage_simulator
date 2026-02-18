@@ -137,6 +137,7 @@ class TestBuildConsumptionFeatures:
             "day_of_week_sin", "day_of_week_cos",
             "is_weekend", "is_holiday",
             "temperature", "wind_speed", "cloud_cover",
+            "humidity",
         ]
         assert list(features.columns) == expected
 
@@ -174,7 +175,9 @@ class TestBuildHeatingFeatures:
             "month_sin", "month_cos",
             "day_of_year_sin", "day_of_year_cos",
             "temperature", "wind_speed", "cloud_cover",
-            "temp_derivative", "is_daylight",
+            "humidity", "wind_chill", "heating_degree_hour", "heating_degree_sq",
+            "temp_derivative", "temp_lag_6h", "temp_lag_12h",
+            "solar_radiation", "is_daylight",
         ]
         assert list(features.columns) == expected
 
@@ -186,6 +189,19 @@ class TestBuildHeatingFeatures:
         features = build_heating_features(weather, _make_config())
         # After 3h, derivative should be 3.0 (each hour increases by 1)
         assert features["temp_derivative"].iloc[3] == pytest.approx(3.0)
+
+    def test_heating_degree_hour_non_negative(self):
+        """heating_degree_hour should always be >= 0."""
+        features = build_heating_features(_make_weather_df(), _make_config())
+        assert (features["heating_degree_hour"] >= 0).all()
+
+    def test_wind_chill_computed(self):
+        """wind_chill should be temperature * wind_speed."""
+        weather = _make_weather_df(n_hours=48)
+        weather["temperature_2m"] = 10.0
+        weather["wind_speed_10m"] = 5.0
+        features = build_heating_features(weather, _make_config())
+        assert features["wind_chill"].iloc[0] == pytest.approx(50.0)
 
     def test_is_daylight_binary(self):
         features = build_heating_features(_make_weather_df(), _make_config())
