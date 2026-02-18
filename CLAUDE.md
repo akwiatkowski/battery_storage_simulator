@@ -111,10 +111,51 @@ Price thresholds use daily P33/P67 percentiles of spot prices (cached per calend
 - **Battery savings**: difference between no-battery and with-battery net cost (both self-consumption and arbitrage)
 - **ROI**: investment = capacity × cost/kWh, annual savings extrapolated, simple payback years
 
+## Python ML Prediction System
+
+LightGBM-based models in `analysis/python/` for accurate energy forecasting.
+
+```bash
+make py-setup         # install Python dependencies
+make py-fetch-weather # download Open-Meteo historical weather
+make py-train-pv      # train PV production model
+make py-evaluate-pv   # generate evaluation plots
+make py-predict       # 48h PV production forecast
+make py-test          # run Python tests
+```
+
+### Models
+
+| Model | Status | Inputs | Predicts |
+|-------|--------|--------|----------|
+| PV Production | Done | irradiance, cloud, temp, hour, month | W per kWp |
+| Base Consumption | Planned | hour, day_of_week, month, temp | W household |
+| Heat Pump Heating | Planned | outdoor_temp, hour, wind_speed | W HP |
+| DHW (hot water) | Planned | hour, day_of_week, month | W DHW |
+| Spot Price | Planned | hour, day_of_week, temp | PLN/kWh |
+
+### Layout
+
+- `analysis/python/config.yaml` — location, PV system, model hyperparams
+- `analysis/python/src/config.py` — config loader
+- `analysis/python/src/data_loading.py` — load HA sensor CSVs (legacy + recent + stats)
+- `analysis/python/src/weather.py` — Open-Meteo API with monthly CSV caching
+- `analysis/python/src/holidays.py` — Polish bank holidays (pure computation)
+- `analysis/python/src/features.py` — feature engineering (cyclical encoding, solar position, clear-sky index)
+- `analysis/python/src/models/base.py` — abstract model base class
+- `analysis/python/src/models/lightgbm_model.py` — LightGBM implementation
+- `analysis/python/src/train.py` — unified training CLI
+- `analysis/python/src/evaluate.py` — evaluation plots CLI
+- `analysis/python/src/predict.py` — forecast CLI
+- `analysis/python/data/weather/` — cached Open-Meteo CSVs (monthly)
+- `analysis/python/models/` — trained model files (.joblib + .json)
+- `analysis/python/output/` — evaluation plots (PNG)
+
 ## Conventions
 
 - Go tests: co-located `_test.go` files, use `testify` for assertions
 - Frontend tests: `vitest` + `@testing-library/svelte`
+- Python tests: `pytest` in `analysis/python/tests/`
 - All WS messages: `{ type: "namespace:action", payload: {...} }`
 - Power values: watts, positive = grid consumption, negative = export
 - Energy values: kWh (watt-hours / 1000)
@@ -125,5 +166,6 @@ Price thresholds use daily P33/P67 percentiles of spot prices (cached per calend
 make test-backend     # Go tests
 make test-backend-v   # Go tests verbose
 make test-frontend    # Frontend tests
+make py-test          # Python ML tests
 make test             # All tests
 ```

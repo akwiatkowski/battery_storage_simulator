@@ -1,0 +1,32 @@
+location:
+  latitude: 52.4064
+  longitude: 16.9252
+  timezone: Europe/Warsaw
+
+pv_system:
+  capacity_kwp: 6.5
+  azimuth: 90        # east-facing
+  tilt: 40
+
+sensors:
+  pv_power: sensor.hoymiles_gateway_solarh_3054300_real_power
+  grid_power: sensor.0x943469fffed2bf71_power
+  hp_heating: sensor.panasonic_heat_pump_main_heat_power_consumption
+  hp_dhw: sensor.panasonic_heat_pump_main_dhw_power_consumption
+  outdoor_temp: sensor.panasonic_heat_pump_main_outside_temp
+  spot_price: sensor.spotprice_now
+
+models:
+  default_params:
+    type: lightgbm
+    test_days: 30
+    params:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 31
+      min_child_samples: 20
+  pv: {}
+  consumption: {}
+  heat_pump: {}
+  dhw: {}
+  spot_price: {}

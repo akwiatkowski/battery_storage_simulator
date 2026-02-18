@@ -7,7 +7,8 @@ export PATH := $(MISE_PATHS)$(PATH)
        dev test lint build clean compare train sample-predict fetch-prices load-analysis ha-fetch-history anomaly-detect voltage-analysis \
        docker-build docker-up docker-down \
        sql-stats \
-       r-analysis r-clean
+       r-analysis r-clean \
+       py-setup py-fetch-weather py-train-pv py-evaluate-pv py-predict py-test py-clean
 
 # Backend
 run-backend:
@@ -127,6 +128,28 @@ r-analysis:
 
 r-clean:
 	$(MAKE) -C analysis/r clean
+
+# Python ML analysis
+py-setup:
+	$(MAKE) -C analysis/python setup
+
+py-fetch-weather:
+	$(MAKE) -C analysis/python fetch-weather
+
+py-train-pv:
+	$(MAKE) -C analysis/python train-pv
+
+py-evaluate-pv:
+	$(MAKE) -C analysis/python evaluate-pv
+
+py-predict:
+	$(MAKE) -C analysis/python predict
+
+py-test:
+	$(MAKE) -C analysis/python test
+
+py-clean:
+	$(MAKE) -C analysis/python clean
 
 # Print SQL query for fetching sensor statistics from Home Assistant DB
 sql-stats:
