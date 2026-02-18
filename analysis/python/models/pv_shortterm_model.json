@@ -1,0 +1,29 @@
+{
+  "type": "lightgbm",
+  "feature_names": [
+    "hour_sin",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "direct_radiation",
+    "diffuse_radiation",
+    "cloud_cover",
+    "temperature",
+    "wind_speed",
+    "solar_elevation",
+    "clear_sky_index",
+    "pv_lag_1h",
+    "pv_lag_2h"
+  ],
+  "train_metrics": {
+    "mae": 17.671020293569363,
+    "rmse": 27.045633025025232,
+    "r2": 0.9836021118008909
+  },
+  "params": {},
+  "n_estimators_actual": 71,
+  "test_metrics": {
+    "mae": 20.679349751152703,
+    "rmse": 32.82053997994381,
+    "r2": 0.9036009317267918
+  }
+}

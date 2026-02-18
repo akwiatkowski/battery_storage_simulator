@@ -162,32 +162,26 @@ def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
     )
 
     feature_cols = [
-        "hour_sin", "hour_cos",
-        "month_sin", "month_cos",
+        "hour_sin",
         "day_of_year_sin", "day_of_year_cos",
         "direct_radiation", "diffuse_radiation",
         "cloud_cover", "temperature", "wind_speed",
-        "solar_elevation", "is_daylight", "clear_sky_index",
+        "solar_elevation", "clear_sky_index",
     ]
     return df[feature_cols]
 
 
-def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
-    """Prepare full PV training dataset: load sensor data, weather, build features.
+def _prepare_pv_common(config: dict, model_key: str) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare PV dataset with config-driven smoothing and optional lag features.
 
-    Supports optional rolling window smoothing on target via
-    config["models"]["pv"]["smoothing_window_h"].
-
-    Returns (X, y, timestamps) where:
-    - X: feature DataFrame
-    - y: target Series (W per kWp)
-    - timestamps: DatetimeIndex for temporal splitting
+    Used by both pv (long-term, no lags) and pv_shortterm (with lags) models.
     """
     root = project_root()
     sensor_id = config["sensors"]["pv_power"]
     capacity = config["pv_system"]["capacity_kwp"]
-    model_cfg = config["models"].get("pv", {})
+    model_cfg = config["models"].get(model_key, {})
     smoothing_window = model_cfg.get("smoothing_window_h", 1)
+    use_lags = model_cfg.get("use_lags", False)
 
     # Load PV sensor data from all sources
     pv_df = load_sensor_data(
@@ -220,11 +214,9 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
     features = build_pv_features(weather_df, config)
 
     # Join PV hourly data with features on hourly timestamp
-    # Both are UTC-indexed
     pv_per_kwp = pv_hourly / capacity
     pv_per_kwp.name = "pv_per_kwp"
 
-    # Align: inner join on common hourly timestamps
     combined = features.join(pv_per_kwp, how="inner")
     combined = combined.dropna(subset=["pv_per_kwp"])
 
@@ -240,6 +232,13 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
             smoothing_window, center=True, min_periods=1).mean()
         print(f"  Smoothing window: {smoothing_window}h")
 
+    # Add lag features (after smoothing so lags are of smoothed signal)
+    if use_lags:
+        combined["pv_lag_1h"] = combined["pv_per_kwp"].shift(1)
+        combined["pv_lag_2h"] = combined["pv_per_kwp"].shift(2)
+        combined = combined.dropna()
+        print(f"  Lag features: pv_lag_1h, pv_lag_2h")
+
     X = combined.drop(columns=["pv_per_kwp"])
     y = combined["pv_per_kwp"]
     timestamps = combined.index
@@ -248,6 +247,16 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
     print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
 
     return X, y, timestamps
+
+
+def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare PV long-term dataset (weather-only, no lag features)."""
+    return _prepare_pv_common(config, "pv")
+
+
+def prepare_pv_shortterm_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare PV short-term dataset (with lag features for nowcasting)."""
+    return _prepare_pv_common(config, "pv_shortterm")
 
 
 # ---------------------------------------------------------------------------

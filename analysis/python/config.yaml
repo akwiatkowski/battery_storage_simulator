@@ -27,6 +27,9 @@ models:
       min_child_samples: 20
   pv:
     smoothing_window_h: 2
+  pv_shortterm:
+    smoothing_window_h: 2
+    use_lags: true
   consumption:
     smoothing_window_h: 6
     test_days: 30

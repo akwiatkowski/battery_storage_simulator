@@ -2,9 +2,6 @@
   "type": "lightgbm",
   "feature_names": [
     "hour_sin",
-    "hour_cos",
-    "month_sin",
-    "month_cos",
     "day_of_year_sin",
     "day_of_year_cos",
     "direct_radiation",
@@ -13,13 +10,12 @@
     "temperature",
     "wind_speed",
     "solar_elevation",
-    "is_daylight",
     "clear_sky_index"
   ],
   "train_metrics": {
-    "mae": 36.367180713880764,
-    "rmse": 55.59337948826527,
-    "r2": 0.9307181061476106
+    "mae": 38.32342725516156,
+    "rmse": 58.105480300857685,
+    "r2": 0.924295767472629
   },
   "params": {
     "n_estimators": 500,
@@ -27,10 +23,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 115,
+  "n_estimators_actual": 94,
   "test_metrics": {
-    "mae": 45.20255433741839,
-    "rmse": 71.8654337837673,
-    "r2": 0.5399289421369126
+    "mae": 45.5703342110675,
+    "rmse": 71.28685003720803,
+    "r2": 0.5452211678129503
   }
 }

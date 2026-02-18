@@ -87,11 +87,11 @@ class TestBuildPVFeatures:
         """Should produce all expected feature columns."""
         features = build_pv_features(_make_weather_df(), _make_config())
         expected = [
-            "hour_sin", "hour_cos", "month_sin", "month_cos",
+            "hour_sin",
             "day_of_year_sin", "day_of_year_cos",
             "direct_radiation", "diffuse_radiation",
             "cloud_cover", "temperature", "wind_speed",
-            "solar_elevation", "is_daylight", "clear_sky_index",
+            "solar_elevation", "clear_sky_index",
         ]
         assert list(features.columns) == expected
 
@@ -103,15 +103,9 @@ class TestBuildPVFeatures:
     def test_cyclical_features_bounded(self):
         """Sin/cos features should be in [-1, 1]."""
         features = build_pv_features(_make_weather_df(n_hours=365 * 24), _make_config())
-        for col in ["hour_sin", "hour_cos", "month_sin", "month_cos",
-                     "day_of_year_sin", "day_of_year_cos"]:
+        for col in ["hour_sin", "day_of_year_sin", "day_of_year_cos"]:
             assert features[col].min() >= -1.0 - 1e-10
             assert features[col].max() <= 1.0 + 1e-10
-
-    def test_is_daylight_binary(self):
-        """is_daylight should be 0 or 1."""
-        features = build_pv_features(_make_weather_df(), _make_config())
-        assert set(features["is_daylight"].unique()).issubset({0, 1})
 
     def test_no_nans(self):
         """Features should not contain NaN values."""
