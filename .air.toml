@@ -2,11 +2,11 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "cd backend && go build -o ../bin/server ./cmd/server/main.go"
+  cmd = "cd simulator/backend && go build -o ../../bin/server ./cmd/server/main.go"
   bin = "./bin/server"
-  args_bin = ["-input-dir", "./input", "-frontend-dir", "./frontend/build"]
+  args_bin = ["-input-dir", "./input", "-frontend-dir", "./simulator/frontend/build"]
   delay = 500
-  exclude_dir = ["tmp", "bin", "frontend", "testdata", "input"]
+  exclude_dir = ["tmp", "bin", "simulator/frontend", "simulator/backend/testdata", "input"]
   exclude_regex = ["_test\\.go$"]
   include_ext = ["go"]
   kill_delay = 500

@@ -1,17 +1,12 @@
 # Go
 /bin/
 /tmp/
-backend/main
-backend/server
-backend/fetch-prices
-backend/sql-stats
-backend/train-predictor
-backend/vendor/
+simulator/backend/vendor/
 
 # Frontend
-frontend/node_modules/
-frontend/.svelte-kit/
-frontend/build/
+simulator/frontend/node_modules/
+simulator/frontend/.svelte-kit/
+simulator/frontend/build/
 
 # IDE
 .idea/
@@ -22,8 +17,9 @@ frontend/build/
 # OS
 .DS_Store
 
-# Input data (privacy)
-input/
+# Input data (privacy — weather is public Open-Meteo data, so tracked)
+input/*
+!input/weather/
 
 # Docker
 docker-compose.override.yml
@@ -35,13 +31,11 @@ docker-compose.override.yml
 .mise.local.toml
 
 # R analysis
-analysis/r/scripts/*.done
+analysis/scripts/*.done
 .Rhistory
 .RData
 
 # Python ML
-# analysis/python/models/
-# analysis/python/output/
-analysis/python/__pycache__/
-analysis/python/**/__pycache__/
+forecast/__pycache__/
+forecast/**/__pycache__/
 *.pyc

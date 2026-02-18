@@ -195,6 +195,24 @@ Partially superseded by #4 (Net Metering & Net Billing) which covers the most im
 - Live loop: prints recommended action every N minutes (configurable)
 - Graceful Ctrl+C shutdown with session summary (cycles, energy, SoC)
 
+## 19. Battery Energy Valuation
+
+Track the average purchase cost of energy stored in the battery. Use it as a safety floor for discharge decisions — never sell stored energy below cost.
+
+**What to build:**
+- **Weighted average cost tracking**: `avg_cost = total_PLN_spent / total_kWh_stored`. PV-charged energy enters at cost = 0 (or opportunity cost = export_price × export_coeff), grid-charged at spot price
+- **Breakeven price**: `min_discharge_price = avg_cost / RTE / export_coeff` (with RTE ~0.90 and export_coeff ~0.80, need ~40% markup over charge cost)
+- **Safety layer for MPC controller**: LP says discharge, but if current price < breakeven → HOLD. Protects against forecast errors
+- **Dashboard display**: show SoC with cost breakdown (PV-sourced vs grid-sourced kWh, avg cost, current profit threshold)
+- **Backtest comparison**: valuation-aware heuristic vs plain P33/P67 vs LP optimal
+
+**Inspiration:** GbbOptimizer (commercial SaaS) uses this as core decision-making feature. They track PV-charged vs grid-charged energy separately and use weighted average cost to prevent unprofitable discharge.
+
+**Key design decisions:**
+- Accounting method: weighted average (simple) vs FIFO (more accurate) vs opportunity cost (most correct)
+- PV cost: 0 (simplest) vs export opportunity cost (more correct, prevents charging from PV when export is more profitable)
+- RTE: fixed 0.90 or measured from actual charge/discharge data
+
 ## 18. Weather-Free ML Models
 
 Weather data requires an external API (Open-Meteo) and forecasts can be unreliable. Experiment with models that use only time/calendar features (no weather, no lags) for maximum reliability.

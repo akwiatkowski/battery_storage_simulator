@@ -6,7 +6,7 @@ Home energy simulator webapp that replays historical energy data via WebSocket.
 
 ```bash
 make dev          # backend :8080 + frontend :5173
-make test         # all tests
+make test         # all tests (Go + Svelte + Python)
 make lint         # all linters
 make train        # train temperature + grid power neural networks
 make sample-predict # generate predictions (temp NN → power NN)
@@ -22,28 +22,53 @@ docker compose up # production build
 
 ## Project Layout
 
-- `backend/cmd/server/main.go` — entry point
-- `backend/cmd/battery-compare/` — CLI tool for battery config comparison
-- `backend/cmd/load-analysis/` — CLI tool for load shifting analysis (COP curves, hourly cost distribution, shift potential)
-- `backend/cmd/ha-fetch-history/` — fetches sensor history from Home Assistant REST API, writes weekly CSVs
-- `backend/cmd/train-predictor/` — trains temperature + grid power neural networks
-- `backend/cmd/sample-predict/` — generates predictions chaining temp NN → power NN
-- `backend/cmd/fetch-prices/` — downloads historic spot prices
-- `backend/cmd/sql-stats/` — generates SQL for Home Assistant DB queries
-- `backend/internal/model/` — domain types (Reading, Sensor, SensorType)
-- `backend/internal/ingest/` — CSV parsing (Home Assistant format)
-- `backend/internal/store/` — in-memory data store
-- `backend/internal/simulator/` — time-based replay engine, thermal model, battery
-- `backend/internal/solar/` — PV profile engine (data-derived hourly profiles, orientation shifting)
-- `backend/internal/predictor/` — neural network engine, temperature + grid power predictors
-- `backend/internal/ws/` — WebSocket hub, handler, message types
-- `frontend/src/lib/ws/` — WebSocket client + message types
-- `frontend/src/lib/stores/` — Svelte 5 reactive state (includes daily record tracking)
-- `frontend/src/lib/components/` — dashboard components
-- `input/` — CSV data files (committed)
-- `input/stats/` — Home Assistant long-term statistics CSV export (training data)
-- `model/` — trained neural network models (temperature.json, grid_power.json)
-- `testdata/` — test fixture CSVs
+```
+├── simulator/                 # Go+Svelte energy simulator webapp
+│   ├── backend/               # Go server + CLI tools
+│   └── frontend/              # Svelte dashboard
+├── analysis/                  # R statistical analysis & graphs
+│   ├── helpers/               # shared R code (load_data.R, theme.R, helpers.R)
+│   └── scripts/               # numbered analysis scripts (01–38)
+├── forecast/                  # Python ML models + optimization + MPC
+│   ├── src/                   # source code
+│   ├── models/                # trained .joblib files
+│   └── tests/                 # pytest tests
+├── battery_optimizer_wasm/    # Rust WASM battery strategy comparison
+│   ├── src/                   # Rust source
+│   └── www/                   # web frontend
+├── input/                     # shared sensor/price CSV data
+│   └── weather/               # Open-Meteo historical cache (tracked in git)
+├── docs/                      # all rendered output (plots, graphs)
+│   ├── analysis/              # R-generated plots
+│   ├── forecast/              # ML evaluation plots, backtests
+│   └── battery_optimizer_wasm/ # WASM comparison charts
+```
+
+### Simulator Backend
+
+- `simulator/backend/cmd/server/main.go` — entry point
+- `simulator/backend/cmd/battery-compare/` — CLI tool for battery config comparison
+- `simulator/backend/cmd/load-analysis/` — CLI tool for load shifting analysis
+- `simulator/backend/cmd/ha-fetch-history/` — fetches sensor history from Home Assistant REST API
+- `simulator/backend/cmd/train-predictor/` — trains temperature + grid power neural networks
+- `simulator/backend/cmd/sample-predict/` — generates predictions chaining temp NN → power NN
+- `simulator/backend/cmd/fetch-prices/` — downloads historic spot prices
+- `simulator/backend/cmd/sql-stats/` — generates SQL for Home Assistant DB queries
+- `simulator/backend/internal/model/` — domain types (Reading, Sensor, SensorType)
+- `simulator/backend/internal/ingest/` — CSV parsing (Home Assistant format)
+- `simulator/backend/internal/store/` — in-memory data store
+- `simulator/backend/internal/simulator/` — time-based replay engine, thermal model, battery
+- `simulator/backend/internal/solar/` — PV profile engine (data-derived hourly profiles, orientation shifting)
+- `simulator/backend/internal/predictor/` — neural network engine, temperature + grid power predictors
+- `simulator/backend/internal/ws/` — WebSocket hub, handler, message types
+- `simulator/backend/model/` — trained neural network models (temperature.json, grid_power.json)
+- `simulator/backend/testdata/` — test fixture CSVs
+
+### Simulator Frontend
+
+- `simulator/frontend/src/lib/ws/` — WebSocket client + message types
+- `simulator/frontend/src/lib/stores/` — Svelte 5 reactive state (includes daily record tracking)
+- `simulator/frontend/src/lib/components/` — dashboard components
 
 ### Key Frontend Components
 
@@ -79,8 +104,8 @@ docker compose up # production build
 
 Two chained neural networks generate realistic energy data:
 
-1. **Temperature NN** (`model/temperature.json`) — predicts outdoor temperature from day-of-year (cyclical), hour (cyclical), and anomaly input. Anomaly=0 is normal; anomaly=+1 shifts output ~0.1-3°C warmer. Training augments data with random anomalies.
-2. **Grid Power NN** (`model/grid_power.json`) — predicts grid power from month (cyclical), hour (cyclical), and temperature. Uses temperature output from the first network.
+1. **Temperature NN** (`simulator/backend/model/temperature.json`) — predicts outdoor temperature from day-of-year (cyclical), hour (cyclical), and anomaly input. Anomaly=0 is normal; anomaly=+1 shifts output ~0.1-3°C warmer. Training augments data with random anomalies.
+2. **Grid Power NN** (`simulator/backend/model/grid_power.json`) — predicts grid power from month (cyclical), hour (cyclical), and temperature. Uses temperature output from the first network.
 
 Both use `[5, 32, 16, 1]` architecture (ReLU hidden, linear output), Adam optimizer, per-hour noise profiles.
 
@@ -113,7 +138,7 @@ Price thresholds use daily P33/P67 percentiles of spot prices (cached per calend
 
 ## Python ML Prediction System
 
-LightGBM-based models in `analysis/python/` for accurate energy forecasting.
+LightGBM-based models in `forecast/` for accurate energy forecasting.
 
 ```bash
 make py-setup         # install Python dependencies
@@ -134,33 +159,33 @@ make py-test          # run Python tests
 | DHW (hot water) | Done | hour, month, day_of_week, weekend, holiday | W DHW |
 | Spot Price | Done | hour, month, day_of_week, temp, wind, weekend, holiday, price lags | PLN/kWh |
 
-### Layout
+### Forecast Layout
 
-- `analysis/python/config.yaml` — location, PV system, model hyperparams
-- `analysis/python/src/config.py` — config loader
-- `analysis/python/src/data_loading.py` — load HA sensor CSVs (legacy + recent + stats)
-- `analysis/python/src/weather.py` — Open-Meteo API with monthly CSV caching
-- `analysis/python/src/holidays.py` — Polish bank holidays (pure computation)
-- `analysis/python/src/features.py` — feature engineering (cyclical encoding, solar position, clear-sky index)
-- `analysis/python/src/models/base.py` — abstract model base class
-- `analysis/python/src/models/lightgbm_model.py` — LightGBM implementation
-- `analysis/python/src/train.py` — unified training CLI
-- `analysis/python/src/evaluate.py` — evaluation plots CLI
-- `analysis/python/src/predict.py` — forecast CLI
-- `analysis/python/src/optimize.py` — LP battery scheduler (scipy linprog)
-- `analysis/python/src/backtest.py` — day-by-day strategy comparison CLI
-- `analysis/python/src/battery_roi.py` — monthly ROI breakdown + capacity sweep CLI
-- `analysis/python/src/battery_hw_roi.py` — Dyness vs Pylontech hardware ROI comparison
-- `analysis/python/src/controller.py` — MPC battery controller (continuous optimization loop)
-- `analysis/python/data/weather/` — cached Open-Meteo CSVs (monthly)
-- `analysis/python/models/` — trained model files (.joblib + .json)
-- `analysis/python/output/` — evaluation plots (PNG)
+- `forecast/config.yaml` — location, PV system, model hyperparams
+- `forecast/src/config.py` — config loader
+- `forecast/src/data_loading.py` — load HA sensor CSVs (legacy + recent + stats)
+- `forecast/src/weather.py` — Open-Meteo API with monthly CSV caching
+- `forecast/src/holidays.py` — Polish bank holidays (pure computation)
+- `forecast/src/features.py` — feature engineering (cyclical encoding, solar position, clear-sky index)
+- `forecast/src/models/base.py` — abstract model base class
+- `forecast/src/models/lightgbm_model.py` — LightGBM implementation
+- `forecast/src/train.py` — unified training CLI
+- `forecast/src/evaluate.py` — evaluation plots CLI
+- `forecast/src/predict.py` — forecast CLI
+- `forecast/src/optimize.py` — LP battery scheduler (scipy linprog)
+- `forecast/src/backtest.py` — day-by-day strategy comparison CLI
+- `forecast/src/battery_roi.py` — monthly ROI breakdown + capacity sweep CLI
+- `forecast/src/battery_hw_roi.py` — Dyness vs Pylontech hardware ROI comparison
+- `forecast/src/controller.py` — MPC battery controller (continuous optimization loop)
+- `input/weather/` — cached Open-Meteo CSVs (monthly, tracked in git)
+- `forecast/models/` — trained model files (.joblib + .json)
+- `docs/forecast/` — evaluation plots (PNG)
 
 ## Conventions
 
 - Go tests: co-located `_test.go` files, use `testify` for assertions
 - Frontend tests: `vitest` + `@testing-library/svelte`
-- Python tests: `pytest` in `analysis/python/tests/`
+- Python tests: `pytest` in `forecast/tests/`
 - All WS messages: `{ type: "namespace:action", payload: {...} }`
 - Power values: watts, positive = grid consumption, negative = export
 - Energy values: kWh (watt-hours / 1000)
@@ -172,5 +197,5 @@ make test-backend     # Go tests
 make test-backend-v   # Go tests verbose
 make test-frontend    # Frontend tests
 make py-test          # Python ML tests
-make test             # All tests
+make test             # All tests (Go + Svelte + Python)
 ```
