@@ -1,7 +1,10 @@
 ROOT := $(shell cd ../.. && pwd)
 PYTHON := python3
 
-.PHONY: setup fetch-weather train-pv evaluate-pv predict test clean
+.PHONY: setup fetch-weather \
+       train-pv train-consumption train-heat-pump train-dhw train-spot-price train-all \
+       evaluate-pv evaluate-consumption evaluate-heat-pump evaluate-dhw evaluate-spot-price evaluate-all \
+       predict test clean
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -9,15 +12,47 @@ setup:
 fetch-weather:
 	cd $(ROOT) && $(PYTHON) -m analysis.python.src.fetch_weather
 
+# Training targets
 train-pv: fetch-weather
 	cd $(ROOT) && $(PYTHON) -m analysis.python.src.train --model pv
 
+train-consumption: fetch-weather
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.train --model consumption
+
+train-heat-pump: fetch-weather
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.train --model heat_pump
+
+train-dhw:
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.train --model dhw
+
+train-spot-price: fetch-weather
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.train --model spot_price
+
+train-all: train-pv train-consumption train-heat-pump train-dhw train-spot-price
+
+# Evaluation targets
 evaluate-pv: train-pv
 	cd $(ROOT) && $(PYTHON) -m analysis.python.src.evaluate --model pv
 
+evaluate-consumption: train-consumption
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.evaluate --model consumption
+
+evaluate-heat-pump: train-heat-pump
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.evaluate --model heat_pump
+
+evaluate-dhw: train-dhw
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.evaluate --model dhw
+
+evaluate-spot-price: train-spot-price
+	cd $(ROOT) && $(PYTHON) -m analysis.python.src.evaluate --model spot_price
+
+evaluate-all: evaluate-pv evaluate-consumption evaluate-heat-pump evaluate-dhw evaluate-spot-price
+
+# Predict
 predict:
 	cd $(ROOT) && $(PYTHON) -m analysis.python.src.predict
 
+# Test
 test:
 	cd $(ROOT) && $(PYTHON) -m pytest analysis/python/tests/ -v
 

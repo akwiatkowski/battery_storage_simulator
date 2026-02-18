@@ -129,10 +129,10 @@ make py-test          # run Python tests
 | Model | Status | Inputs | Predicts |
 |-------|--------|--------|----------|
 | PV Production | Done | irradiance, cloud, temp, hour, month | W per kWp |
-| Base Consumption | Planned | hour, day_of_week, month, temp | W household |
-| Heat Pump Heating | Planned | outdoor_temp, hour, wind_speed | W HP |
-| DHW (hot water) | Planned | hour, day_of_week, month | W DHW |
-| Spot Price | Planned | hour, day_of_week, temp | PLN/kWh |
+| Base Consumption | Done | hour, day_of_week, month, temp, wind, cloud, weekend, holiday | W household |
+| Heat Pump Heating | Done | hour, month, temp, wind, cloud, temp_derivative, is_daylight | W HP |
+| DHW (hot water) | Done | hour, month, day_of_week, weekend, holiday | W DHW |
+| Spot Price | Done | hour, month, day_of_week, temp, wind, weekend, holiday, price lags | PLN/kWh |
 
 ### Layout
 

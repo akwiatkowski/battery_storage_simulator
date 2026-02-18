@@ -8,12 +8,22 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from .config import load_config, python_root
-from .features import prepare_pv_dataset
+from .features import (
+    prepare_pv_dataset,
+    prepare_consumption_dataset,
+    prepare_heat_pump_dataset,
+    prepare_dhw_dataset,
+    prepare_spot_price_dataset,
+)
 from .models.lightgbm_model import LightGBMModel
 
 
 PREPARE_FUNCTIONS = {
     "pv": prepare_pv_dataset,
+    "consumption": prepare_consumption_dataset,
+    "heat_pump": prepare_heat_pump_dataset,
+    "dhw": prepare_dhw_dataset,
+    "spot_price": prepare_spot_price_dataset,
 }
 
 

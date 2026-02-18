@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 
 from .config import load_config, project_root
-from .data_loading import load_sensor_data
+from .data_loading import load_sensor_data, load_spot_prices
+from .holidays import is_holiday
 from .weather import fetch_historical
 
 
@@ -62,20 +63,16 @@ def _cyclical_encode(series: pd.Series, period: float) -> tuple[pd.Series, pd.Se
     return np.sin(angle), np.cos(angle)
 
 
-def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
-    """Build feature DataFrame for PV model from weather data.
+# ---------------------------------------------------------------------------
+# Shared feature helpers
+# ---------------------------------------------------------------------------
 
-    Input weather_df must have a UTC-aware 'timestamp' column.
-    Returns DataFrame indexed by timestamp with all PV features.
+def _add_time_features(df: pd.DataFrame, config: dict) -> None:
+    """Add hour/month/day_of_year cyclical features (in-place).
+
+    Reused by all models. Requires df to be indexed by UTC timestamps.
     """
-    loc = config["location"]
-    df = weather_df.copy()
-    df = df.set_index("timestamp").sort_index()
-
-    # Convert to local time for cyclical features
-    local_idx = df.index.tz_convert(loc["timezone"])
-
-    # Cyclical time features
+    local_idx = df.index.tz_convert(config["location"]["timezone"])
     df["hour_sin"], df["hour_cos"] = _cyclical_encode(
         pd.Series(local_idx.hour + local_idx.minute / 60.0, index=df.index), 24.0
     )
@@ -86,12 +83,64 @@ def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
         pd.Series(local_idx.dayofyear, index=df.index), 365.25
     )
 
-    # Weather features (already present, just rename for clarity)
-    df["direct_radiation"] = df["direct_radiation"].fillna(0)
-    df["diffuse_radiation"] = df["diffuse_radiation"].fillna(0)
-    df["cloud_cover"] = df["cloud_cover"].fillna(50)
+
+def _add_behavioral_time_features(df: pd.DataFrame, config: dict) -> None:
+    """Add day_of_week sin/cos, is_weekend, is_holiday (in-place).
+
+    For models where human behavior matters (consumption, DHW, spot price).
+    """
+    local_idx = df.index.tz_convert(config["location"]["timezone"])
+    df["day_of_week_sin"], df["day_of_week_cos"] = _cyclical_encode(
+        pd.Series(local_idx.dayofweek, index=df.index), 7.0
+    )
+    df["is_weekend"] = pd.Series(local_idx.dayofweek, index=df.index).isin([5, 6]).astype(int)
+    df["is_holiday"] = pd.Series(
+        [is_holiday(d.date()) for d in local_idx], index=df.index
+    ).astype(int)
+
+
+def _add_weather_features(df: pd.DataFrame) -> None:
+    """Add temperature, wind_speed, cloud_cover from weather columns (in-place).
+
+    Expects raw weather column names (temperature_2m, wind_speed_10m, cloud_cover).
+    """
     df["temperature"] = df["temperature_2m"].ffill()
     df["wind_speed"] = df["wind_speed_10m"].fillna(0)
+    df["cloud_cover"] = df["cloud_cover"].fillna(50)
+
+
+def _load_weather(config: dict, start_date: date, end_date: date) -> pd.DataFrame:
+    """Load historical weather data for a date range."""
+    root = project_root()
+    cache_dir = root / "analysis" / "python" / "data" / "weather"
+    loc = config["location"]
+    print(f"  Loading weather data: {start_date} to {end_date}")
+    weather_df = fetch_historical(loc["latitude"], loc["longitude"], start_date, end_date, cache_dir)
+    if weather_df.empty:
+        raise ValueError("No weather data available")
+    return weather_df
+
+
+# ---------------------------------------------------------------------------
+# PV model
+# ---------------------------------------------------------------------------
+
+def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Build feature DataFrame for PV model from weather data.
+
+    Input weather_df must have a UTC-aware 'timestamp' column.
+    Returns DataFrame indexed by timestamp with all PV features.
+    """
+    loc = config["location"]
+    df = weather_df.copy()
+    df = df.set_index("timestamp").sort_index()
+
+    _add_time_features(df, config)
+    _add_weather_features(df)
+
+    # PV-specific: radiation and solar features
+    df["direct_radiation"] = df["direct_radiation"].fillna(0)
+    df["diffuse_radiation"] = df["diffuse_radiation"].fillna(0)
 
     # Solar elevation
     df["solar_elevation"] = [
@@ -102,13 +151,10 @@ def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
     # Global horizontal irradiance (approximate)
     ghi = df["direct_radiation"] + df["diffuse_radiation"]
 
-    # Clear-sky GHI estimate (simplified: extraterrestrial × atmospheric transmission)
+    # Clear-sky GHI estimate (simplified: extraterrestrial x atmospheric transmission)
     solar_elev_rad = np.radians(df["solar_elevation"].clip(lower=0))
-    # Extraterrestrial irradiance on horizontal surface
-    ext_ghi = 1361.0 * np.sin(solar_elev_rad)  # W/m²
-    # Simple clear-sky model: ~75% transmission at sea level
+    ext_ghi = 1361.0 * np.sin(solar_elev_rad)  # W/m2
     clear_sky_ghi = ext_ghi * 0.75
-    # Clear-sky index: ratio of actual to theoretical
     df["clear_sky_index"] = np.where(
         clear_sky_ghi > 50, (ghi / clear_sky_ghi).clip(0, 1.5), 0.0
     )
@@ -161,13 +207,7 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
     end_date = pv_hourly.index.max().date()
 
     # Fetch/load weather data
-    cache_dir = root / "analysis" / "python" / "data" / "weather"
-    loc = config["location"]
-    print(f"  Loading weather data: {start_date} to {end_date}")
-    weather_df = fetch_historical(loc["latitude"], loc["longitude"], start_date, end_date, cache_dir)
-
-    if weather_df.empty:
-        raise ValueError("No weather data available")
+    weather_df = _load_weather(config, start_date, end_date)
 
     # Build features from weather
     features = build_pv_features(weather_df, config)
@@ -192,6 +232,320 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
     timestamps = combined.index
 
     print(f"  Training samples (daytime): {len(X)}")
+    print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
+
+    return X, y, timestamps
+
+
+# ---------------------------------------------------------------------------
+# Base Consumption model
+# ---------------------------------------------------------------------------
+
+def build_consumption_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Build features for base consumption model.
+
+    Features: time cyclicals, behavioral (day_of_week, weekend, holiday),
+    weather (temperature, wind_speed, cloud_cover).
+    """
+    df = weather_df.copy()
+    df = df.set_index("timestamp").sort_index()
+
+    _add_time_features(df, config)
+    _add_behavioral_time_features(df, config)
+    _add_weather_features(df)
+
+    feature_cols = [
+        "hour_sin", "hour_cos",
+        "month_sin", "month_cos",
+        "day_of_year_sin", "day_of_year_cos",
+        "day_of_week_sin", "day_of_week_cos",
+        "is_weekend", "is_holiday",
+        "temperature", "wind_speed", "cloud_cover",
+    ]
+    return df[feature_cols]
+
+
+def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare base consumption dataset.
+
+    base_load = grid_power + pv_power - hp_heat - hp_dhw (household excl. HP).
+    """
+    root = project_root()
+    sensors = config["sensors"]
+
+    # Load 4 sensors
+    sensor_defs = {
+        "grid": (sensors["grid_power"], "grid_power.csv"),
+        "pv": (sensors["pv_power"], "pv_power.csv"),
+        "hp_heat": (sensors["hp_heating"], "pump_heat_power_consumed.csv"),
+        "hp_dhw": (sensors["hp_dhw"], "pump_cwu_power_consumed.csv"),
+    }
+
+    hourly = {}
+    for name, (sensor_id, legacy_file) in sensor_defs.items():
+        df = load_sensor_data(
+            sensor_id=sensor_id,
+            legacy_path=root / "input" / legacy_file,
+            recent_dir=root / "input" / "recent",
+        )
+        if df.empty and name in ("grid", "pv"):
+            raise ValueError(f"No data found for required sensor {sensor_id}")
+        if df.empty:
+            print(f"  Warning: no data for {name} ({sensor_id}), will fill with 0")
+            continue
+
+        print(f"  {name} readings: {len(df)}")
+        df = df.set_index("timestamp")
+        df.index = df.index.tz_convert("UTC")
+        hourly[name] = df["value"].resample("h").mean()
+
+    # Inner-join grid + pv (required), left-join HP sensors
+    combined = pd.DataFrame({"grid": hourly["grid"], "pv": hourly["pv"]}).dropna()
+    for name in ("hp_heat", "hp_dhw"):
+        if name in hourly:
+            combined[name] = hourly[name].reindex(combined.index).fillna(0)
+        else:
+            combined[name] = 0.0
+
+    # Compute base load
+    combined["base_load"] = (
+        combined["grid"] + combined["pv"] - combined["hp_heat"] - combined["hp_dhw"]
+    ).clip(lower=0)
+
+    print(f"  Hourly consumption samples: {len(combined)}")
+
+    # Load weather
+    start_date = combined.index.min().date()
+    end_date = combined.index.max().date()
+    weather_df = _load_weather(config, start_date, end_date)
+
+    features = build_consumption_features(weather_df, config)
+
+    # Join
+    target = combined["base_load"]
+    target.name = "base_load"
+    joined = features.join(target, how="inner").dropna(subset=["base_load"])
+
+    X = joined.drop(columns=["base_load"])
+    y = joined["base_load"]
+    timestamps = joined.index
+
+    print(f"  Training samples: {len(X)}")
+    print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
+
+    return X, y, timestamps
+
+
+# ---------------------------------------------------------------------------
+# Heat Pump Heating model
+# ---------------------------------------------------------------------------
+
+def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Build features for heat pump heating model.
+
+    Features: time cyclicals, weather, temp_derivative, is_daylight.
+    """
+    loc = config["location"]
+    df = weather_df.copy()
+    df = df.set_index("timestamp").sort_index()
+
+    _add_time_features(df, config)
+    _add_weather_features(df)
+
+    # Temperature derivative: change over previous 3 hours
+    df["temp_derivative"] = df["temperature"].diff(3).fillna(0)
+
+    # Solar elevation for is_daylight
+    df["is_daylight"] = pd.Series(
+        [1 if solar_elevation(loc["latitude"], loc["longitude"], ts) > 0 else 0
+         for ts in df.index],
+        index=df.index,
+    )
+
+    feature_cols = [
+        "hour_sin", "hour_cos",
+        "month_sin", "month_cos",
+        "day_of_year_sin", "day_of_year_cos",
+        "temperature", "wind_speed", "cloud_cover",
+        "temp_derivative", "is_daylight",
+    ]
+    return df[feature_cols]
+
+
+def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare heat pump heating dataset."""
+    root = project_root()
+    sensor_id = config["sensors"]["hp_heating"]
+
+    hp_df = load_sensor_data(
+        sensor_id=sensor_id,
+        legacy_path=root / "input" / "pump_heat_power_consumed.csv",
+        recent_dir=root / "input" / "recent",
+    )
+    if hp_df.empty:
+        raise ValueError(f"No HP heating data found for sensor {sensor_id}")
+
+    print(f"  HP heating readings: {len(hp_df)}")
+
+    hp_df = hp_df.set_index("timestamp")
+    hp_df.index = hp_df.index.tz_convert("UTC")
+
+    # Resample to hourly, fill NaN with 0 (HP off = no heating)
+    hp_hourly = hp_df["value"].resample("h").mean().fillna(0).clip(lower=0)
+    print(f"  Hourly HP samples: {len(hp_hourly)}")
+
+    # Load weather
+    start_date = hp_hourly.index.min().date()
+    end_date = hp_hourly.index.max().date()
+    weather_df = _load_weather(config, start_date, end_date)
+
+    features = build_heating_features(weather_df, config)
+
+    # Join
+    target = hp_hourly
+    target.name = "hp_heat_w"
+    joined = features.join(target, how="inner")
+    joined["hp_heat_w"] = joined["hp_heat_w"].fillna(0)
+
+    X = joined.drop(columns=["hp_heat_w"])
+    y = joined["hp_heat_w"]
+    timestamps = joined.index
+
+    print(f"  Training samples: {len(X)}")
+    print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
+
+    return X, y, timestamps
+
+
+# ---------------------------------------------------------------------------
+# DHW (hot water) model
+# ---------------------------------------------------------------------------
+
+def build_dhw_features(timestamps_index: pd.DatetimeIndex, config: dict) -> pd.DataFrame:
+    """Build features for DHW model. No weather needed — purely behavioral.
+
+    Features: hour/month cyclicals, day_of_week, is_weekend, is_holiday.
+    """
+    df = pd.DataFrame(index=timestamps_index)
+
+    _add_time_features(df, config)
+    _add_behavioral_time_features(df, config)
+
+    feature_cols = [
+        "hour_sin", "hour_cos",
+        "month_sin", "month_cos",
+        "day_of_week_sin", "day_of_week_cos",
+        "is_weekend", "is_holiday",
+    ]
+    return df[feature_cols]
+
+
+def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare DHW (hot water) dataset."""
+    root = project_root()
+    sensor_id = config["sensors"]["hp_dhw"]
+
+    dhw_df = load_sensor_data(
+        sensor_id=sensor_id,
+        legacy_path=root / "input" / "pump_cwu_power_consumed.csv",
+        recent_dir=root / "input" / "recent",
+    )
+    if dhw_df.empty:
+        raise ValueError(f"No DHW data found for sensor {sensor_id}")
+
+    print(f"  DHW readings: {len(dhw_df)}")
+
+    dhw_df = dhw_df.set_index("timestamp")
+    dhw_df.index = dhw_df.index.tz_convert("UTC")
+
+    # Resample to hourly, fill NaN with 0 (no DHW = 0W, that IS the signal)
+    dhw_hourly = dhw_df["value"].resample("h").mean().fillna(0).clip(lower=0)
+    print(f"  Hourly DHW samples: {len(dhw_hourly)}")
+
+    # Build features from timestamps (no weather needed)
+    features = build_dhw_features(dhw_hourly.index, config)
+
+    X = features
+    y = dhw_hourly.reindex(features.index).fillna(0)
+    y.name = "dhw_w"
+    timestamps = features.index
+
+    print(f"  Training samples: {len(X)}")
+    print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
+
+    return X, y, timestamps
+
+
+# ---------------------------------------------------------------------------
+# Spot Price model
+# ---------------------------------------------------------------------------
+
+def build_spot_price_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Build features for spot price model.
+
+    Features: time cyclicals, behavioral (day_of_week, weekend, holiday),
+    temperature, wind_speed.
+    """
+    df = weather_df.copy()
+    df = df.set_index("timestamp").sort_index()
+
+    _add_time_features(df, config)
+    _add_behavioral_time_features(df, config)
+    _add_weather_features(df)
+
+    feature_cols = [
+        "hour_sin", "hour_cos",
+        "month_sin", "month_cos",
+        "day_of_week_sin", "day_of_week_cos",
+        "is_weekend", "is_holiday",
+        "temperature", "wind_speed",
+    ]
+    return df[feature_cols]
+
+
+def prepare_spot_price_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
+    """Prepare spot price dataset."""
+    root = project_root()
+
+    # Load historic spot prices
+    prices_path = root / "input" / "recent" / "historic_spot_prices.csv"
+    price_df = load_spot_prices(prices_path)
+    if price_df.empty:
+        raise ValueError(f"No spot price data found at {prices_path}")
+
+    print(f"  Spot price readings: {len(price_df)}")
+
+    price_df = price_df.set_index("timestamp").sort_index()
+    # Already hourly, but resample to ensure alignment
+    price_hourly = price_df["value"].resample("h").mean().dropna()
+    print(f"  Hourly price samples: {len(price_hourly)}")
+
+    # Load weather (limit start to 2024-07-01 to match weather cache)
+    weather_start = date(2024, 7, 1)
+    start_date = max(price_hourly.index.min().date(), weather_start)
+    end_date = price_hourly.index.max().date()
+    weather_df = _load_weather(config, start_date, end_date)
+
+    features = build_spot_price_features(weather_df, config)
+
+    # Join
+    target = price_hourly
+    target.name = "spot_price"
+    joined = features.join(target, how="inner").dropna(subset=["spot_price"])
+
+    # Add lagged features (after join, since they depend on price continuity)
+    joined["price_lag_1h"] = joined["spot_price"].shift(1)
+    joined["price_lag_24h"] = joined["spot_price"].shift(24)
+    joined["price_rolling_24h_mean"] = joined["spot_price"].rolling(24, min_periods=1).mean()
+
+    # Drop rows with NaN from lags (first 24h)
+    joined = joined.dropna()
+
+    X = joined.drop(columns=["spot_price"])
+    y = joined["spot_price"]
+    timestamps = joined.index
+
+    print(f"  Training samples: {len(X)}")
     print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
 
     return X, y, timestamps

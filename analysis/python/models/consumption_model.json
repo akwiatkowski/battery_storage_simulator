@@ -1,0 +1,30 @@
+{
+  "type": "lightgbm",
+  "feature_names": [
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "is_weekend",
+    "is_holiday",
+    "temperature",
+    "wind_speed",
+    "cloud_cover"
+  ],
+  "train_metrics": {
+    "mae": 326.28642415796327,
+    "rmse": 425.8580613544661,
+    "r2": 0.24141826741281636
+  },
+  "params": {
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_child_samples": 20
+  },
+  "n_estimators_actual": 21
+}

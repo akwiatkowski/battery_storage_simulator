@@ -40,8 +40,8 @@ analysis/r/scripts/*.done
 .RData
 
 # Python ML
-analysis/python/models/
-analysis/python/output/
+# analysis/python/models/
+# analysis/python/output/
 analysis/python/__pycache__/
 analysis/python/**/__pycache__/
 *.pyc

@@ -1,6 +1,7 @@
 """Load Home Assistant sensor data from the three CSV formats."""
 
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 
@@ -106,3 +107,16 @@ def load_sensor_data(
     # Deduplicate: keep first occurrence (recent data tends to be more accurate)
     result = result.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="first")
     return result.reset_index(drop=True)
+
+
+def load_spot_prices(path: Path) -> pd.DataFrame:
+    """Load historic spot prices CSV (recent format: sensor_id,value,updated_ts).
+
+    Returns DataFrame with columns: timestamp (UTC-aware), value (float, PLN/kWh).
+    Already hourly data — one row per hour from 2017 onwards.
+    """
+    df = pd.read_csv(path, dtype={"sensor_id": str, "value": str, "updated_ts": float})
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df.dropna(subset=["value"])
+    df["timestamp"] = pd.to_datetime(df["updated_ts"], unit="s", utc=True)
+    return df[["timestamp", "value"]].sort_values("timestamp").reset_index(drop=True)

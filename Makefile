@@ -8,7 +8,7 @@ export PATH := $(MISE_PATHS)$(PATH)
        docker-build docker-up docker-down \
        sql-stats \
        r-analysis r-clean \
-       py-setup py-fetch-weather py-train-pv py-evaluate-pv py-predict py-test py-clean
+       py-setup py-fetch-weather py-train-pv py-evaluate-pv py-predict py-test py-clean py-train-all py-evaluate-all
 
 # Backend
 run-backend:
@@ -147,6 +147,12 @@ py-predict:
 
 py-test:
 	$(MAKE) -C analysis/python test
+
+py-train-all:
+	$(MAKE) -C analysis/python train-all
+
+py-evaluate-all:
+	$(MAKE) -C analysis/python evaluate-all
 
 py-clean:
 	$(MAKE) -C analysis/python clean

@@ -1,0 +1,30 @@
+{
+  "type": "lightgbm",
+  "feature_names": [
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "is_weekend",
+    "is_holiday",
+    "temperature",
+    "wind_speed",
+    "price_lag_1h",
+    "price_lag_24h",
+    "price_rolling_24h_mean"
+  ],
+  "train_metrics": {
+    "mae": 0.03707923366854066,
+    "rmse": 0.05726602656283858,
+    "r2": 0.9430772247486177
+  },
+  "params": {
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_child_samples": 20
+  },
+  "n_estimators_actual": 168
+}

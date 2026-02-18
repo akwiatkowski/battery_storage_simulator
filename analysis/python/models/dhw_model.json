@@ -1,0 +1,25 @@
+{
+  "type": "lightgbm",
+  "feature_names": [
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "is_weekend",
+    "is_holiday"
+  ],
+  "train_metrics": {
+    "mae": 67.7444602762098,
+    "rmse": 145.04861819561302,
+    "r2": 0.0023732576242508907
+  },
+  "params": {
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_child_samples": 20
+  },
+  "n_estimators_actual": 1
+}
