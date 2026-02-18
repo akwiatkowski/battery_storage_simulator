@@ -28,7 +28,7 @@ models:
   pv:
     smoothing_window_h: 2
   consumption:
-    resolution: 1h
+    smoothing_window_h: 6
     test_days: 30
     params:
       n_estimators: 500

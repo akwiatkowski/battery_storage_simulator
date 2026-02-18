@@ -334,8 +334,9 @@ def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, 
         combined["grid"] + combined["pv"] - combined["hp_heat"] - combined["hp_dhw"]
     ).clip(lower=0)
 
+    smoothing_window = model_cfg.get("smoothing_window_h", 1)
+
     print(f"  Hourly consumption samples: {len(combined)}")
-    print(f"  Resolution: {resolution}")
 
     # Load weather
     start_date = combined.index.min().date()
@@ -349,33 +350,15 @@ def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, 
     target.name = "base_load"
     joined = features.join(target, how="inner").dropna(subset=["base_load"])
 
-    # Aggregate to desired resolution
-    if resolution != "1h":
-        joined = joined.resample(resolution).mean()
+    # Apply rolling window smoothing to target (keeps all hourly samples)
+    if smoothing_window > 1:
+        joined["base_load"] = joined["base_load"].rolling(
+            smoothing_window, center=True, min_periods=1).mean()
+        print(f"  Smoothing window: {smoothing_window}h")
 
-        # Drop features that lose meaning at coarser resolutions
-        drop_cols = []
-        if resolution in ("6h", "12h", "24h", "D"):
-            drop_cols += ["hour_sin", "hour_cos"]
-        if resolution in ("24h", "D"):
-            drop_cols += ["month_sin", "month_cos"]
-        if drop_cols:
-            joined = joined.drop(columns=list(set(drop_cols)), errors="ignore")
-
-        joined = joined.dropna()
-        print(f"  Samples at {resolution}: {len(joined)}")
-
-    # Lagged target features (capture consumption momentum/patterns)
+    # Lagged target feature — previous hour's smoothed load
     # Use shift(1) to avoid target leakage — only past data
-    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
-    ppd = periods_per_day.get(resolution, 24)
-    shifted_load = joined["base_load"].shift(1)
-    joined["load_lag_1"] = shifted_load                                        # previous period
-    joined["load_lag_1d"] = joined["base_load"].shift(ppd)                     # same period yesterday
-    joined["load_rolling_6h"] = shifted_load.rolling(
-        max(ppd // 4, 1), min_periods=1).mean()                                # short-term rolling avg (past only)
-    joined["load_rolling_1d"] = shifted_load.rolling(
-        ppd, min_periods=1).mean()                                              # 24h rolling avg (past only)
+    joined["load_lag_1h"] = joined["base_load"].shift(1)
     joined = joined.dropna()
 
     X = joined.drop(columns=["base_load"])

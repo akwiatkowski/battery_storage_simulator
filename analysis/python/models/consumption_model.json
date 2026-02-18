@@ -16,15 +16,12 @@
     "cloud_cover",
     "humidity",
     "solar_radiation",
-    "load_lag_1",
-    "load_lag_1d",
-    "load_rolling_6h",
-    "load_rolling_1d"
+    "load_lag_1h"
   ],
   "train_metrics": {
-    "mae": 275.97929709580865,
-    "rmse": 370.57910414505926,
-    "r2": 0.42705207726220273
+    "mae": 67.59071194733998,
+    "rmse": 88.5936681056747,
+    "r2": 0.9042057294212857
   },
   "params": {
     "n_estimators": 500,
@@ -32,10 +29,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 54,
+  "n_estimators_actual": 82,
   "test_metrics": {
-    "mae": 391.71786645108415,
-    "rmse": 511.012911533887,
-    "r2": 0.18508758000879166
+    "mae": 98.40092186613106,
+    "rmse": 128.69819350684867,
+    "r2": 0.8622681818533015
   }
 }
