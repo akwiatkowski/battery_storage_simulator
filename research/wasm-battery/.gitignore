@@ -1,0 +1,4 @@
+target/
+www/pkg/
+www/data.json
+data/hourly.json
