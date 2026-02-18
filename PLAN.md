@@ -166,3 +166,53 @@ Partially superseded by #4 (Net Metering & Net Billing) which covers the most im
 - 58 help entries defined in `$lib/help-texts.ts` covering all dashboard values
 - 78 HelpTip instances across EnergySummary, CostSummary, BatteryStats, BatteryConfig, SimConfig, PredictionComparison, HeatingAnalysis, and more
 - Close via X button, click outside, or Escape key
+
+## ~~15. Python ML Prediction Models~~ (DONE)
+
+**Implemented:**
+- 6 LightGBM models: PV (long-term R²=0.55, short-term R²=0.90), consumption (R²=0.86), heat pump (R²=0.55), DHW (R²=-0.04), spot price (R²=0.86)
+- Open-Meteo weather data integration with monthly CSV caching
+- Feature engineering: cyclical encoding, solar position, clear-sky index, rolling smoothing, lag features
+- Training CLI (`python -m analysis.python.src.train`), evaluation CLI (`evaluate`), forecast CLI (`predict`)
+- Polish holiday support, configurable model hyperparameters via `config.yaml`
+
+## ~~16. Battery LP Optimizer & Backtest~~ (DONE)
+
+**Implemented:**
+- Linear programming battery scheduler (`optimize.py`): minimizes electricity cost with SoC/power constraints
+- P33/P67 heuristic simulator matching Go implementation for comparison
+- Day-by-day backtest tool (`backtest.py`): LP optimal vs heuristic vs no-battery on historical data
+- Battery ROI analysis (`battery_roi.py`): monthly breakdown, capacity sweep, payback calculator
+- Hardware ROI comparison (`battery_hw_roi.py`): Dyness vs Pylontech configurations with real hardware costs, investment analysis, comparison plots
+
+## ~~17. MPC Battery Controller~~ (DONE)
+
+**Implemented:**
+- Model Predictive Control loop (`controller.py`): fetches weather, runs all 5 ML models, optimizes battery schedule
+- Single weather API call per forecast cycle (1h cache TTL)
+- 2-pass autoregressive prediction for consumption and spot price lag features
+- Startup: prints full 24h LP-optimal schedule
+- Live loop: prints recommended action every N minutes (configurable)
+- Graceful Ctrl+C shutdown with session summary (cycles, energy, SoC)
+
+## 18. Weather-Free ML Models
+
+Weather data requires an external API (Open-Meteo) and forecasts can be unreliable. Experiment with models that use only time/calendar features (no weather, no lags) for maximum reliability.
+
+**Tested results** (time-only vs with-weather, no lags, with smoothing):
+
+| Model | Smooth | R² time-only | R² +weather | Weather impact |
+|-------|--------|-------------|-------------|----------------|
+| PV Production | 4h | -0.204 | 0.547 | Critical (+0.75) |
+| HP Heating | 24h | -0.311 | 0.409 | Critical (+0.72) |
+| Spot Price | 1h | 0.430 | 0.488 | Minimal (+0.06) |
+| Consumption | 12h | -0.024 | -0.027 | None |
+| DHW | 24h | -0.188 | -0.032 | Minimal (+0.16) |
+
+**Conclusions:**
+- **PV and HP**: Weather is essential — irradiance drives PV, temperature drives heating. Time-only models are worse than predicting the mean. No viable weather-free alternative.
+- **Spot Price**: Weather barely helps. Time-of-day/week patterns explain most variance. Price lags (not weather) are the real signal (current model with lags: R²=0.86).
+- **Consumption**: Weather irrelevant without lags. The `load_lag_1h` feature is what drives the current R²=0.86 model.
+- **DHW**: Nothing helps much — fundamentally unpredictable.
+
+**If implemented**, only spot price, consumption, and DHW would benefit from weather-free variants (they already barely use weather). PV and HP need weather — consider a fallback strategy (e.g., use seasonal averages when forecast unavailable) rather than dropping weather entirely.

@@ -147,6 +147,11 @@ make py-test          # run Python tests
 - `analysis/python/src/train.py` — unified training CLI
 - `analysis/python/src/evaluate.py` — evaluation plots CLI
 - `analysis/python/src/predict.py` — forecast CLI
+- `analysis/python/src/optimize.py` — LP battery scheduler (scipy linprog)
+- `analysis/python/src/backtest.py` — day-by-day strategy comparison CLI
+- `analysis/python/src/battery_roi.py` — monthly ROI breakdown + capacity sweep CLI
+- `analysis/python/src/battery_hw_roi.py` — Dyness vs Pylontech hardware ROI comparison
+- `analysis/python/src/controller.py` — MPC battery controller (continuous optimization loop)
 - `analysis/python/data/weather/` — cached Open-Meteo CSVs (monthly)
 - `analysis/python/models/` — trained model files (.joblib + .json)
 - `analysis/python/output/` — evaluation plots (PNG)
