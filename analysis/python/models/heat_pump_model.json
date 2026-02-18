@@ -17,15 +17,12 @@
     "temp_change_24h",
     "precipitation",
     "solar_radiation",
-    "temp_min",
-    "hp_lag_1",
-    "hp_lag_1d",
-    "hp_rolling_1d"
+    "temp_min"
   ],
   "train_metrics": {
-    "mae": 9.46977011275983,
-    "rmse": 13.417071100921907,
-    "r2": 0.9934394143984016
+    "mae": 22.81570440879891,
+    "rmse": 31.11101845064399,
+    "r2": 0.9647165873358413
   },
   "params": {
     "n_estimators": 500,
@@ -34,10 +31,10 @@
     "min_child_samples": 5,
     "under_weight": 3.0
   },
-  "n_estimators_actual": 247,
+  "n_estimators_actual": 99,
   "test_metrics": {
-    "mae": 96.64723491030288,
-    "rmse": 140.49586704135635,
-    "r2": 0.7313402856838971
+    "mae": 124.07547868331761,
+    "rmse": 182.1978169693397,
+    "r2": 0.5486751789023154
   }
 }

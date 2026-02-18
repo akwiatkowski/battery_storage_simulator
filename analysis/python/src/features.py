@@ -175,6 +175,9 @@ def build_pv_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFrame:
 def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
     """Prepare full PV training dataset: load sensor data, weather, build features.
 
+    Supports optional rolling window smoothing on target via
+    config["models"]["pv"]["smoothing_window_h"].
+
     Returns (X, y, timestamps) where:
     - X: feature DataFrame
     - y: target Series (W per kWp)
@@ -183,6 +186,8 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
     root = project_root()
     sensor_id = config["sensors"]["pv_power"]
     capacity = config["pv_system"]["capacity_kwp"]
+    model_cfg = config["models"].get("pv", {})
+    smoothing_window = model_cfg.get("smoothing_window_h", 1)
 
     # Load PV sensor data from all sources
     pv_df = load_sensor_data(
@@ -228,6 +233,12 @@ def prepare_pv_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Dateti
 
     # Clip negative PV values (sensor noise)
     combined["pv_per_kwp"] = combined["pv_per_kwp"].clip(lower=0)
+
+    # Apply rolling window smoothing to target
+    if smoothing_window > 1:
+        combined["pv_per_kwp"] = combined["pv_per_kwp"].rolling(
+            smoothing_window, center=True, min_periods=1).mean()
+        print(f"  Smoothing window: {smoothing_window}h")
 
     X = combined.drop(columns=["pv_per_kwp"])
     y = combined["pv_per_kwp"]
@@ -445,7 +456,7 @@ def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFra
 
 
 def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
-    """Prepare heat pump heating dataset.
+    """Prepare heat pump heating dataset (weather-only, no lag features).
 
     Supports configurable resolution via config["models"]["heat_pump"]["resolution"].
     Values: "1h" (default), "6h", "12h", "24h". Coarser resolutions smooth out
@@ -510,14 +521,6 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
         joined = joined.dropna()
         print(f"  Samples at {resolution}: {len(joined)}")
 
-    # Lagged target features (at final resolution — captures heating momentum)
-    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
-    ppd = periods_per_day.get(resolution, 24)
-    joined["hp_lag_1"] = joined["hp_heat_w"].shift(1)        # previous period
-    joined["hp_lag_1d"] = joined["hp_heat_w"].shift(ppd)     # same period yesterday
-    joined["hp_rolling_1d"] = joined["hp_heat_w"].rolling(ppd, min_periods=1).mean()  # 24h rolling avg
-    joined = joined.dropna()
-
     # Filter to heating conditions only (removes summer with HP=0)
     heating_threshold = model_cfg.get("heating_threshold_c")
     if heating_threshold is not None:
@@ -533,6 +536,7 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
     print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
 
     return X, y, timestamps
+
 
 
 # ---------------------------------------------------------------------------
@@ -569,13 +573,13 @@ def build_dhw_features(timestamps_index: pd.DatetimeIndex, config: dict,
 def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
     """Prepare DHW (hot water) dataset.
 
-    Supports configurable resolution via config["models"]["dhw"]["resolution"].
-    Adds lag features and temperature.
+    Uses rolling window smoothing on target to predict daily-scale DHW demand
+    while keeping all hourly samples for training. No lag features needed.
     """
     root = project_root()
     sensor_id = config["sensors"]["hp_dhw"]
     model_cfg = config["models"].get("dhw", {})
-    resolution = model_cfg.get("resolution", "1h")
+    smoothing_window = model_cfg.get("smoothing_window_h", 24)
 
     dhw_df = load_sensor_data(
         sensor_id=sensor_id,
@@ -593,7 +597,6 @@ def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Datet
     # Resample to hourly, fill NaN with 0 (no DHW = 0W, that IS the signal)
     dhw_hourly = dhw_df["value"].resample("h").mean().fillna(0).clip(lower=0)
     print(f"  Hourly DHW samples: {len(dhw_hourly)}")
-    print(f"  Resolution: {resolution}")
 
     # Load weather for temperature feature
     start_date = dhw_hourly.index.min().date()
@@ -607,29 +610,12 @@ def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Datet
     joined = features.copy()
     joined["dhw_w"] = dhw_hourly.reindex(features.index).fillna(0)
 
-    # Aggregate to desired resolution
-    if resolution != "1h":
-        joined = joined.resample(resolution).mean()
-        drop_cols = []
-        if resolution in ("6h", "12h", "24h", "D"):
-            drop_cols += ["hour_sin", "hour_cos"]
-        if resolution in ("24h", "D"):
-            drop_cols += ["month_sin", "month_cos"]
-        if drop_cols:
-            joined = joined.drop(columns=list(set(drop_cols)), errors="ignore")
-        joined = joined.dropna()
-        print(f"  Samples at {resolution}: {len(joined)}")
+    # Apply rolling window smoothing to target
+    if smoothing_window > 1:
+        joined["dhw_w"] = joined["dhw_w"].rolling(
+            smoothing_window, center=True, min_periods=1).mean()
+        print(f"  Smoothing window: {smoothing_window}h")
 
-    # Lagged target features (past only — shift to avoid leakage)
-    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
-    ppd = periods_per_day.get(resolution, 24)
-    shifted = joined["dhw_w"].shift(1)
-    joined["dhw_lag_1"] = shifted                                           # previous period
-    joined["dhw_lag_1d"] = joined["dhw_w"].shift(ppd)                       # same period yesterday
-    joined["dhw_rolling_6h"] = shifted.rolling(
-        max(ppd // 4, 1), min_periods=1).mean()                             # short-term rolling (past only)
-    joined["dhw_rolling_1d"] = shifted.rolling(
-        ppd, min_periods=1).mean()                                           # 24h rolling (past only)
     joined = joined.dropna()
 
     X = joined.drop(columns=["dhw_w"])

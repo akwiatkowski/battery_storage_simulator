@@ -9,27 +9,23 @@
     "day_of_week_cos",
     "is_weekend",
     "is_holiday",
-    "temperature",
-    "dhw_lag_1",
-    "dhw_lag_1d",
-    "dhw_rolling_6h",
-    "dhw_rolling_1d"
+    "temperature"
   ],
   "train_metrics": {
-    "mae": 49.40188577620593,
-    "rmse": 117.92855845787471,
-    "r2": 0.3412370682045358
+    "mae": 11.787313783049816,
+    "rmse": 14.771744545091838,
+    "r2": 0.24099748724500714
   },
   "params": {
     "n_estimators": 500,
-    "learning_rate": 0.05,
-    "num_leaves": 31,
+    "learning_rate": 0.03,
+    "num_leaves": 7,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 58,
+  "n_estimators_actual": 183,
   "test_metrics": {
-    "mae": 101.13003884559815,
-    "rmse": 316.5447672875185,
-    "r2": 0.10987655163641163
+    "mae": 27.944874272443585,
+    "rmse": 44.84850269319235,
+    "r2": -0.03634608365084713
   }
 }

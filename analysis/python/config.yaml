@@ -25,7 +25,8 @@ models:
       learning_rate: 0.05
       num_leaves: 31
       min_child_samples: 20
-  pv: {}
+  pv:
+    smoothing_window_h: 2
   consumption:
     resolution: 1h
     test_days: 30
@@ -44,5 +45,12 @@ models:
       num_leaves: 31
       min_child_samples: 5
       under_weight: 3.0
-  dhw: {}
+  dhw:
+    smoothing_window_h: 24
+    test_days: 90
+    params:
+      n_estimators: 500
+      learning_rate: 0.03
+      num_leaves: 7
+      min_child_samples: 20
   spot_price: {}
