@@ -16,9 +16,9 @@
     "price_rolling_24h_mean"
   ],
   "train_metrics": {
-    "mae": 0.03707923366854066,
-    "rmse": 0.05726602656283858,
-    "r2": 0.9430772247486177
+    "mae": 0.037477023809795916,
+    "rmse": 0.05781076260116231,
+    "r2": 0.9419891322683835
   },
   "params": {
     "n_estimators": 500,
@@ -26,5 +26,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 168
+  "n_estimators_actual": 158,
+  "test_metrics": {
+    "mae": 0.04017424081140797,
+    "rmse": 0.07021145653007992,
+    "r2": 0.8597031061725878
+  }
 }

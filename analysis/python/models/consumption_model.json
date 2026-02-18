@@ -14,12 +14,17 @@
     "temperature",
     "wind_speed",
     "cloud_cover",
-    "humidity"
+    "humidity",
+    "solar_radiation",
+    "load_lag_1",
+    "load_lag_1d",
+    "load_rolling_6h",
+    "load_rolling_1d"
   ],
   "train_metrics": {
-    "mae": 327.26332680670055,
-    "rmse": 426.7116696724562,
-    "r2": 0.23837415151654484
+    "mae": 275.97929709580865,
+    "rmse": 370.57910414505926,
+    "r2": 0.42705207726220273
   },
   "params": {
     "n_estimators": 500,
@@ -27,10 +32,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 20,
+  "n_estimators_actual": 54,
   "test_metrics": {
-    "mae": 424.9179671290042,
-    "rmse": 558.2077936573302,
-    "r2": 0.02121275535784961
+    "mae": 391.71786645108415,
+    "rmse": 511.012911533887,
+    "r2": 0.18508758000879166
   }
 }

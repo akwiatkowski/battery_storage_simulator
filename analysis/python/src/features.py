@@ -247,7 +247,7 @@ def build_consumption_features(weather_df: pd.DataFrame, config: dict) -> pd.Dat
     """Build features for base consumption model.
 
     Features: time cyclicals, behavioral (day_of_week, weekend, holiday),
-    weather (temperature, wind_speed, cloud_cover).
+    weather (temperature, wind_speed, cloud_cover), solar radiation.
     """
     df = weather_df.copy()
     df = df.set_index("timestamp").sort_index()
@@ -256,6 +256,11 @@ def build_consumption_features(weather_df: pd.DataFrame, config: dict) -> pd.Dat
     _add_behavioral_time_features(df, config)
     _add_weather_features(df)
 
+    # Solar radiation: affects lighting usage and occupant behavior
+    df["solar_radiation"] = (
+        df["direct_radiation"].fillna(0) + df["diffuse_radiation"].fillna(0)
+    )
+
     feature_cols = [
         "hour_sin", "hour_cos",
         "month_sin", "month_cos",
@@ -263,7 +268,7 @@ def build_consumption_features(weather_df: pd.DataFrame, config: dict) -> pd.Dat
         "day_of_week_sin", "day_of_week_cos",
         "is_weekend", "is_holiday",
         "temperature", "wind_speed", "cloud_cover",
-        "humidity",
+        "humidity", "solar_radiation",
     ]
     return df[feature_cols]
 
@@ -272,9 +277,12 @@ def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, 
     """Prepare base consumption dataset.
 
     base_load = grid_power + pv_power - hp_heat - hp_dhw (household excl. HP).
+    Supports configurable resolution via config["models"]["consumption"]["resolution"].
     """
     root = project_root()
     sensors = config["sensors"]
+    model_cfg = config["models"].get("consumption", {})
+    resolution = model_cfg.get("resolution", "1h")
 
     # Load 4 sensors
     sensor_defs = {
@@ -316,6 +324,7 @@ def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, 
     ).clip(lower=0)
 
     print(f"  Hourly consumption samples: {len(combined)}")
+    print(f"  Resolution: {resolution}")
 
     # Load weather
     start_date = combined.index.min().date()
@@ -324,10 +333,39 @@ def prepare_consumption_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, 
 
     features = build_consumption_features(weather_df, config)
 
-    # Join
+    # Join at hourly resolution
     target = combined["base_load"]
     target.name = "base_load"
     joined = features.join(target, how="inner").dropna(subset=["base_load"])
+
+    # Aggregate to desired resolution
+    if resolution != "1h":
+        joined = joined.resample(resolution).mean()
+
+        # Drop features that lose meaning at coarser resolutions
+        drop_cols = []
+        if resolution in ("6h", "12h", "24h", "D"):
+            drop_cols += ["hour_sin", "hour_cos"]
+        if resolution in ("24h", "D"):
+            drop_cols += ["month_sin", "month_cos"]
+        if drop_cols:
+            joined = joined.drop(columns=list(set(drop_cols)), errors="ignore")
+
+        joined = joined.dropna()
+        print(f"  Samples at {resolution}: {len(joined)}")
+
+    # Lagged target features (capture consumption momentum/patterns)
+    # Use shift(1) to avoid target leakage — only past data
+    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
+    ppd = periods_per_day.get(resolution, 24)
+    shifted_load = joined["base_load"].shift(1)
+    joined["load_lag_1"] = shifted_load                                        # previous period
+    joined["load_lag_1d"] = joined["base_load"].shift(ppd)                     # same period yesterday
+    joined["load_rolling_6h"] = shifted_load.rolling(
+        max(ppd // 4, 1), min_periods=1).mean()                                # short-term rolling avg (past only)
+    joined["load_rolling_1d"] = shifted_load.rolling(
+        ppd, min_periods=1).mean()                                              # 24h rolling avg (past only)
+    joined = joined.dropna()
 
     X = joined.drop(columns=["base_load"])
     y = joined["base_load"]
@@ -501,10 +539,12 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
 # DHW (hot water) model
 # ---------------------------------------------------------------------------
 
-def build_dhw_features(timestamps_index: pd.DatetimeIndex, config: dict) -> pd.DataFrame:
-    """Build features for DHW model. No weather needed — purely behavioral.
+def build_dhw_features(timestamps_index: pd.DatetimeIndex, config: dict,
+                       weather_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Build features for DHW model.
 
-    Features: hour/month cyclicals, day_of_week, is_weekend, is_holiday.
+    Features: hour/month cyclicals, day_of_week, is_weekend, is_holiday,
+    plus temperature (affects cold water inlet temp → energy needed).
     """
     df = pd.DataFrame(index=timestamps_index)
 
@@ -517,13 +557,25 @@ def build_dhw_features(timestamps_index: pd.DatetimeIndex, config: dict) -> pd.D
         "day_of_week_sin", "day_of_week_cos",
         "is_weekend", "is_holiday",
     ]
+
+    if weather_df is not None:
+        wdf = weather_df.copy().set_index("timestamp").sort_index()
+        df["temperature"] = wdf["temperature_2m"].reindex(df.index, method="nearest")
+        feature_cols.append("temperature")
+
     return df[feature_cols]
 
 
 def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.DatetimeIndex]:
-    """Prepare DHW (hot water) dataset."""
+    """Prepare DHW (hot water) dataset.
+
+    Supports configurable resolution via config["models"]["dhw"]["resolution"].
+    Adds lag features and temperature.
+    """
     root = project_root()
     sensor_id = config["sensors"]["hp_dhw"]
+    model_cfg = config["models"].get("dhw", {})
+    resolution = model_cfg.get("resolution", "1h")
 
     dhw_df = load_sensor_data(
         sensor_id=sensor_id,
@@ -541,14 +593,48 @@ def prepare_dhw_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd.Datet
     # Resample to hourly, fill NaN with 0 (no DHW = 0W, that IS the signal)
     dhw_hourly = dhw_df["value"].resample("h").mean().fillna(0).clip(lower=0)
     print(f"  Hourly DHW samples: {len(dhw_hourly)}")
+    print(f"  Resolution: {resolution}")
 
-    # Build features from timestamps (no weather needed)
-    features = build_dhw_features(dhw_hourly.index, config)
+    # Load weather for temperature feature
+    start_date = dhw_hourly.index.min().date()
+    end_date = dhw_hourly.index.max().date()
+    weather_df = _load_weather(config, start_date, end_date)
 
-    X = features
-    y = dhw_hourly.reindex(features.index).fillna(0)
-    y.name = "dhw_w"
-    timestamps = features.index
+    # Build features with weather
+    features = build_dhw_features(dhw_hourly.index, config, weather_df=weather_df)
+
+    # Join features with target
+    joined = features.copy()
+    joined["dhw_w"] = dhw_hourly.reindex(features.index).fillna(0)
+
+    # Aggregate to desired resolution
+    if resolution != "1h":
+        joined = joined.resample(resolution).mean()
+        drop_cols = []
+        if resolution in ("6h", "12h", "24h", "D"):
+            drop_cols += ["hour_sin", "hour_cos"]
+        if resolution in ("24h", "D"):
+            drop_cols += ["month_sin", "month_cos"]
+        if drop_cols:
+            joined = joined.drop(columns=list(set(drop_cols)), errors="ignore")
+        joined = joined.dropna()
+        print(f"  Samples at {resolution}: {len(joined)}")
+
+    # Lagged target features (past only — shift to avoid leakage)
+    periods_per_day = {"1h": 24, "6h": 4, "12h": 2, "24h": 1, "D": 1}
+    ppd = periods_per_day.get(resolution, 24)
+    shifted = joined["dhw_w"].shift(1)
+    joined["dhw_lag_1"] = shifted                                           # previous period
+    joined["dhw_lag_1d"] = joined["dhw_w"].shift(ppd)                       # same period yesterday
+    joined["dhw_rolling_6h"] = shifted.rolling(
+        max(ppd // 4, 1), min_periods=1).mean()                             # short-term rolling (past only)
+    joined["dhw_rolling_1d"] = shifted.rolling(
+        ppd, min_periods=1).mean()                                           # 24h rolling (past only)
+    joined = joined.dropna()
+
+    X = joined.drop(columns=["dhw_w"])
+    y = joined["dhw_w"]
+    timestamps = joined.index
 
     print(f"  Training samples: {len(X)}")
     print(f"  Date range: {timestamps.min()} to {timestamps.max()}")
@@ -613,10 +699,11 @@ def prepare_spot_price_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, p
     target.name = "spot_price"
     joined = features.join(target, how="inner").dropna(subset=["spot_price"])
 
-    # Add lagged features (after join, since they depend on price continuity)
-    joined["price_lag_1h"] = joined["spot_price"].shift(1)
+    # Add lagged features (past only — shift to avoid leakage)
+    shifted_price = joined["spot_price"].shift(1)
+    joined["price_lag_1h"] = shifted_price
     joined["price_lag_24h"] = joined["spot_price"].shift(24)
-    joined["price_rolling_24h_mean"] = joined["spot_price"].rolling(24, min_periods=1).mean()
+    joined["price_rolling_24h_mean"] = shifted_price.rolling(24, min_periods=1).mean()
 
     # Drop rows with NaN from lags (first 24h)
     joined = joined.dropna()

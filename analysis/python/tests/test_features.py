@@ -137,7 +137,7 @@ class TestBuildConsumptionFeatures:
             "day_of_week_sin", "day_of_week_cos",
             "is_weekend", "is_holiday",
             "temperature", "wind_speed", "cloud_cover",
-            "humidity",
+            "humidity", "solar_radiation",
         ]
         assert list(features.columns) == expected
 
@@ -221,7 +221,7 @@ class TestBuildHeatingFeatures:
 class TestBuildDHWFeatures:
     """Test DHW feature building."""
 
-    def test_output_columns(self):
+    def test_output_columns_without_weather(self):
         """Should produce time-only features without weather."""
         timestamps = pd.date_range("2024-07-01", periods=48, freq="h", tz="UTC")
         features = build_dhw_features(timestamps, _make_config())
@@ -232,6 +232,15 @@ class TestBuildDHWFeatures:
             "is_weekend", "is_holiday",
         ]
         assert list(features.columns) == expected
+
+    def test_output_columns_with_weather(self):
+        """Should include temperature when weather is provided."""
+        weather = _make_weather_df(n_hours=48)
+        timestamps = weather["timestamp"]
+        features = build_dhw_features(pd.DatetimeIndex(timestamps), _make_config(),
+                                       weather_df=weather)
+        assert "temperature" in features.columns
+        assert len(features.columns) == 9  # 8 time + 1 temperature
 
     def test_works_without_weather(self):
         """Should work with just timestamps, no weather DataFrame."""

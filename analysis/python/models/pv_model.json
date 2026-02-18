@@ -17,9 +17,9 @@
     "clear_sky_index"
   ],
   "train_metrics": {
-    "mae": 40.91307619165863,
-    "rmse": 63.87406667825794,
-    "r2": 0.914583330508671
+    "mae": 43.25074575609399,
+    "rmse": 66.71542593122516,
+    "r2": 0.9068129095975436
   },
   "params": {
     "n_estimators": 500,
@@ -27,5 +27,10 @@
     "num_leaves": 31,
     "min_child_samples": 20
   },
-  "n_estimators_actual": 96
+  "n_estimators_actual": 79,
+  "test_metrics": {
+    "mae": 48.41104861685464,
+    "rmse": 78.96806435739236,
+    "r2": 0.5073263717455263
+  }
 }

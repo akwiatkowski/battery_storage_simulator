@@ -26,7 +26,14 @@ models:
       num_leaves: 31
       min_child_samples: 20
   pv: {}
-  consumption: {}
+  consumption:
+    resolution: 1h
+    test_days: 30
+    params:
+      n_estimators: 500
+      learning_rate: 0.05
+      num_leaves: 31
+      min_child_samples: 20
   heat_pump:
     resolution: 6h
     heating_threshold_c: 15
