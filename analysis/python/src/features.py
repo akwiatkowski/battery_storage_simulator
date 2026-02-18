@@ -367,9 +367,18 @@ def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFra
     # Squared heating degree: nonlinear heat loss at extreme cold
     df["heating_degree_sq"] = df["heating_degree_hour"] ** 2
 
+    # Wind-driven heat loss: combines cold severity with wind (always positive)
+    df["wind_heat_loss"] = df["heating_degree_hour"] * df["wind_speed"]
+
     # Longer temperature history
     df["temp_lag_6h"] = df["temperature"].shift(6).ffill().bfill()
     df["temp_lag_12h"] = df["temperature"].shift(12).ffill().bfill()
+
+    # Temperature change over 24h (cold front detection)
+    df["temp_change_24h"] = df["temperature"].diff(24).fillna(0)
+
+    # Precipitation: frontal weather indicator
+    df["precipitation"] = df["precipitation"].fillna(0)
 
     # Solar radiation: passive solar gains reduce heating demand
     df["solar_radiation"] = (
@@ -389,7 +398,9 @@ def build_heating_features(weather_df: pd.DataFrame, config: dict) -> pd.DataFra
         "day_of_year_sin", "day_of_year_cos",
         "temperature", "wind_speed", "cloud_cover",
         "humidity", "wind_chill", "heating_degree_hour", "heating_degree_sq",
-        "temp_derivative", "temp_lag_6h", "temp_lag_12h",
+        "wind_heat_loss",
+        "temp_derivative", "temp_lag_6h", "temp_lag_12h", "temp_change_24h",
+        "precipitation",
         "solar_radiation", "is_daylight",
     ]
     return df[feature_cols]
@@ -450,9 +461,9 @@ def prepare_heat_pump_dataset(config: dict) -> tuple[pd.DataFrame, pd.Series, pd
         drop_cols = []
         if resolution in ("24h", "D"):
             drop_cols += ["hour_sin", "hour_cos", "is_daylight",
-                          "temp_derivative", "temp_lag_6h", "temp_lag_12h"]
+                          "temp_derivative", "temp_lag_6h", "temp_lag_12h",
+                          "temp_change_24h", "month_sin", "month_cos"]
         if resolution in ("6h", "12h", "24h", "D"):
-            # Low importance at 6h+: hour cyclicals and month cyclicals
             drop_cols += ["hour_sin", "hour_cos", "is_daylight",
                           "month_sin", "month_cos"]
         if drop_cols:

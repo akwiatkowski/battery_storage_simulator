@@ -12,6 +12,21 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from .base import BaseModel
 
 
+def _make_asymmetric_mse(under_weight: float):
+    """Create asymmetric MSE objective: penalizes underestimation under_weight× more.
+
+    When under_weight > 1, the model prefers to overestimate rather than underestimate.
+    LGBMRegressor sklearn API passes (y_true, y_pred) to custom objectives.
+    """
+    def asymmetric_mse(y_true, y_pred):
+        residual = y_true - y_pred  # positive = underestimation
+        weight = np.where(residual > 0, under_weight, 1.0)
+        grad = -2.0 * weight * residual  # d(loss)/d(y_pred)
+        hess = 2.0 * weight
+        return grad, hess
+    return asymmetric_mse
+
+
 class LightGBMModel(BaseModel):
     def __init__(self, params: dict | None = None):
         self.params = params or {}
@@ -19,12 +34,22 @@ class LightGBMModel(BaseModel):
         self.feature_names: list[str] = []
         self.train_metrics: dict = {}
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, eval_set=None) -> dict:
+    def fit(self, X: pd.DataFrame, y: pd.Series, eval_set=None,
+            sample_weight=None) -> dict:
         """Train LightGBM model with optional eval set for early stopping."""
         self.feature_names = list(X.columns)
 
+        # Extract custom params (not LightGBM params)
+        custom_keys = {"under_weight", "quantile_alpha"}
+        lgb_params = {k: v for k, v in self.params.items()
+                      if k not in custom_keys}
+        under_weight = self.params.get("under_weight")
+        quantile_alpha = self.params.get("quantile_alpha")
+
         callbacks = []
         fit_params = {}
+        if sample_weight is not None:
+            fit_params["sample_weight"] = sample_weight
         if eval_set is not None:
             fit_params["eval_set"] = [eval_set]
             fit_params["eval_metric"] = "mae"
@@ -33,7 +58,13 @@ class LightGBMModel(BaseModel):
             callbacks.append(early_stopping(50, verbose=True))
             callbacks.append(log_evaluation(100))
 
-        self.model = LGBMRegressor(**self.params, verbose=-1)
+        if quantile_alpha is not None:
+            self.model = LGBMRegressor(**lgb_params, objective="quantile",
+                                       alpha=quantile_alpha, verbose=-1)
+        elif under_weight is not None and under_weight > 1.0:
+            self.model = LGBMRegressor(**lgb_params, objective=_make_asymmetric_mse(under_weight), verbose=-1)
+        else:
+            self.model = LGBMRegressor(**lgb_params, verbose=-1)
         self.model.fit(X, y, callbacks=callbacks, **fit_params)
 
         # Compute training metrics
@@ -56,7 +87,13 @@ class LightGBMModel(BaseModel):
         if self.model is None:
             raise RuntimeError("No model to save")
 
+        # Clear custom objective before pickling (not needed at inference time)
+        obj = self.model.objective
+        if callable(obj):
+            self.model.set_params(objective="regression")
         joblib.dump(self.model, f"{path}.joblib")
+        if callable(obj):
+            self.model.set_params(objective=obj)
 
         meta = {
             "type": "lightgbm",

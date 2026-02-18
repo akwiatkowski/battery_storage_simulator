@@ -91,9 +91,19 @@ def train_model(model_name: str, config: dict) -> None:
     print(f"  Train: {len(X_train)} samples ({timestamps[train_mask].min()} to {timestamps[train_mask].max()})")
     print(f"  Test:  {len(X_test)} samples ({timestamps[test_mask].min()} to {timestamps[test_mask].max()})")
 
+    # Compute sample weights for heating models: weight cold samples more
+    sample_weight = None
+    if "heating_degree_hour" in X_train.columns:
+        hdh = X_train["heating_degree_hour"].values
+        # Weight proportional to heating severity: 1 + (hdh/10)^2
+        # At HDH=30 (-12°C): weight=10, at HDH=15 (3°C): weight=3.25, at HDH=5 (13°C): weight=1.25
+        sample_weight = 1.0 + (hdh / 10.0) ** 2
+        print(f"  Sample weights: min={sample_weight.min():.1f}, max={sample_weight.max():.1f}, mean={sample_weight.mean():.1f}")
+
     # Instantiate and train
     model = LightGBMModel(params=model_cfg.get("params", {}))
-    train_metrics = model.fit(X_train, y_train, eval_set=(X_test, y_test))
+    train_metrics = model.fit(X_train, y_train, eval_set=(X_test, y_test),
+                              sample_weight=sample_weight)
 
     # Test metrics
     y_pred = model.predict(X_test)

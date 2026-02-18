@@ -176,7 +176,9 @@ class TestBuildHeatingFeatures:
             "day_of_year_sin", "day_of_year_cos",
             "temperature", "wind_speed", "cloud_cover",
             "humidity", "wind_chill", "heating_degree_hour", "heating_degree_sq",
-            "temp_derivative", "temp_lag_6h", "temp_lag_12h",
+            "wind_heat_loss",
+            "temp_derivative", "temp_lag_6h", "temp_lag_12h", "temp_change_24h",
+            "precipitation",
             "solar_radiation", "is_daylight",
         ]
         assert list(features.columns) == expected

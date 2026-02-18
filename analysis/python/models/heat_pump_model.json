@@ -10,9 +10,12 @@
     "wind_chill",
     "heating_degree_hour",
     "heating_degree_sq",
+    "wind_heat_loss",
     "temp_derivative",
     "temp_lag_6h",
     "temp_lag_12h",
+    "temp_change_24h",
+    "precipitation",
     "solar_radiation",
     "temp_min",
     "hp_lag_1",
@@ -20,20 +23,21 @@
     "hp_rolling_1d"
   ],
   "train_metrics": {
-    "mae": 17.415378078392543,
-    "rmse": 28.588831123426747,
-    "r2": 0.9702328301222163
+    "mae": 9.46977011275983,
+    "rmse": 13.417071100921907,
+    "r2": 0.9934394143984016
   },
   "params": {
     "n_estimators": 500,
     "learning_rate": 0.03,
-    "num_leaves": 15,
-    "min_child_samples": 30
+    "num_leaves": 31,
+    "min_child_samples": 5,
+    "under_weight": 3.0
   },
-  "n_estimators_actual": 372,
+  "n_estimators_actual": 247,
   "test_metrics": {
-    "mae": 101.2630849653789,
-    "rmse": 155.53341139566731,
-    "r2": 0.67855168861473
+    "mae": 96.64723491030288,
+    "rmse": 140.49586704135635,
+    "r2": 0.7313402856838971
   }
 }
