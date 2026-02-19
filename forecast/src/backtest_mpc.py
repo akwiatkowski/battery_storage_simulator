@@ -1,8 +1,9 @@
 """MPC Forecast Backtest: compare LP optimizer using ML forecasts vs actual data.
 
-Replays historical days to evaluate the cost of imperfect forecasting — the gap
-between what the controller achieves with predictions and what's theoretically
-optimal with perfect information.
+Replays historical days to evaluate battery optimization under realistic conditions.
+The primary scenario is "Day-Ahead": known TGE spot prices (published by ~14:00 CET
+the day before) combined with ML-forecast load. This is compared against perfect-info
+optimization (theoretical best) and no-battery baseline.
 
 Usage:
     mise exec -- python -m forecast.src.backtest_mpc --days 14
@@ -223,8 +224,9 @@ def print_explanation(params: BatteryParams, capacity_kwh: float):
     print("Scenarios:")
     print("  No Battery    — baseline cost without any battery")
     print("  Perfect Info  — LP optimizer with actual measured data (theoretical best)")
-    print("  MPC Forecast  — LP optimizer with ML-predicted load and prices (realistic)")
-    print("  MPC + Prices  — LP optimizer with predicted load but actual prices")
+    print("  Day-Ahead     — forecast load + known TGE prices (realistic scenario)")
+    print("                   Polish day-ahead prices are published by ~14:00 CET")
+    print("  Full Forecast — LP optimizer with ML-predicted load AND prices (pessimistic)")
     print()
     soc_min_pct = params.soc_min_wh / params.capacity_wh * 100
     soc_max_pct = params.soc_max_wh / params.capacity_wh * 100
@@ -245,8 +247,9 @@ def print_explanation(params: BatteryParams, capacity_kwh: float):
     print("                HP = heat pump heating, DHW = hot water heating")
     print()
     print("Cost Table shows daily electricity cost under each scenario:")
-    print("  Savings %  — reduction vs no-battery baseline")
-    print("  Gap        — money left on the table due to imperfect forecasts")
+    print("  DA Save    — Day-Ahead savings vs no-battery (the achievable target)")
+    print("  Perf Save  — Perfect Info savings (theoretical ceiling)")
+    print("  Gap        — money left on the table vs perfect info (forecast penalty)")
     print()
 
 
@@ -311,25 +314,25 @@ def run_backtest(
             actuals["net_load"], actuals["price"], params.export_coeff
         )
 
-        # 2. Perfect info: LP on actual data
+        # 2. Perfect info: LP on actual data (theoretical ceiling)
         perfect = optimize_battery(
             actuals["net_load"], actuals["price"], params, initial_soc
         )
 
-        # 3. MPC forecast: optimize on forecast, simulate on actuals
-        mpc_opt = optimize_battery(
-            forecast["net_load"], forecast["price"], params, initial_soc
-        )
-        mpc_cost = _simulate_schedule_on_actuals(
-            mpc_opt, actuals["net_load"], actuals["price"], params, initial_soc
-        )
-
-        # 4. MPC + known prices: forecast load, actual prices
+        # 3. Day-Ahead (realistic): forecast load + known TGE prices
         mpc_prices_opt = optimize_battery(
             forecast["net_load"], actuals["price"], params, initial_soc
         )
         mpc_prices_cost = _simulate_schedule_on_actuals(
             mpc_prices_opt, actuals["net_load"], actuals["price"], params, initial_soc
+        )
+
+        # 4. Full Forecast (pessimistic): forecast both load and prices
+        mpc_opt = optimize_battery(
+            forecast["net_load"], forecast["price"], params, initial_soc
+        )
+        mpc_cost = _simulate_schedule_on_actuals(
+            mpc_opt, actuals["net_load"], actuals["price"], params, initial_soc
         )
 
         cost_results.append({
@@ -366,8 +369,8 @@ def run_backtest(
         print(
             f"  {day_str}: no_batt={no_batt.total_cost_pln:6.2f}  "
             f"perfect={perfect.total_cost_pln:6.2f}  "
-            f"mpc={mpc_cost.total_cost_pln:6.2f}  "
-            f"mpc+price={mpc_prices_cost.total_cost_pln:6.2f}"
+            f"day-ahead={mpc_prices_cost.total_cost_pln:6.2f}  "
+            f"full_fcst={mpc_cost.total_cost_pln:6.2f}"
         )
 
         if do_plot:
@@ -480,8 +483,8 @@ def print_cost_results(cost_df: pd.DataFrame):
     print()
     header = (
         f"{'Date':<12} {'No Batt':>8} {'Perfect':>8} "
-        f"{'MPC':>8} {'MPC+Price':>9}  "
-        f"{'MPC Save':>9} {'Perf Save':>10} {'Gap':>6}"
+        f"{'Day-Ahead':>9} {'Full Fcst':>9}  "
+        f"{'DA Save':>8} {'Perf Save':>10} {'Gap':>6}"
     )
     print(header)
     print("-" * len(header))
@@ -490,16 +493,16 @@ def print_cost_results(cost_df: pd.DataFrame):
         nb = row["no_batt_pln"]
         perf = row["perfect_pln"]
         mpc = row["mpc_pln"]
-        mpc_p = row["mpc_prices_pln"]
+        da = row["mpc_prices_pln"]
 
-        mpc_save = (1 - mpc / nb) * 100 if nb != 0 else 0
+        da_save = (1 - da / nb) * 100 if nb != 0 else 0
         perf_save = (1 - perf / nb) * 100 if nb != 0 else 0
-        gap = perf_save - mpc_save
+        gap = perf_save - da_save
 
         print(
             f"{row['date']:<12} {nb:>8.2f} {perf:>8.2f} "
-            f"{mpc:>8.2f} {mpc_p:>9.2f}  "
-            f"{mpc_save:>+8.1f}% {perf_save:>+9.1f}% {gap:>+5.1f}%"
+            f"{da:>9.2f} {mpc:>9.2f}  "
+            f"{da_save:>+7.1f}% {perf_save:>+9.1f}% {gap:>+5.1f}%"
         )
 
     print("-" * len(header))
@@ -508,23 +511,28 @@ def print_cost_results(cost_df: pd.DataFrame):
     t_nb = cost_df["no_batt_pln"].sum()
     t_perf = cost_df["perfect_pln"].sum()
     t_mpc = cost_df["mpc_pln"].sum()
-    t_mpc_p = cost_df["mpc_prices_pln"].sum()
-    mpc_save = (1 - t_mpc / t_nb) * 100 if t_nb != 0 else 0
+    t_da = cost_df["mpc_prices_pln"].sum()
+    da_save = (1 - t_da / t_nb) * 100 if t_nb != 0 else 0
     perf_save = (1 - t_perf / t_nb) * 100 if t_nb != 0 else 0
-    gap = perf_save - mpc_save
+    gap = perf_save - da_save
 
     print(
         f"{'TOTAL':<12} {t_nb:>8.2f} {t_perf:>8.2f} "
-        f"{t_mpc:>8.2f} {t_mpc_p:>9.2f}  "
-        f"{mpc_save:>+8.1f}% {perf_save:>+9.1f}% {gap:>+5.1f}%"
+        f"{t_da:>9.2f} {t_mpc:>9.2f}  "
+        f"{da_save:>+7.1f}% {perf_save:>+9.1f}% {gap:>+5.1f}%"
     )
 
     n_days = len(cost_df)
-    forecast_penalty = t_mpc - t_perf
+    da_penalty = t_da - t_perf
     print()
     print(
-        f"Forecast penalty: {forecast_penalty:.2f} PLN / {n_days} days "
-        f"= {forecast_penalty / n_days:.2f} PLN/day"
+        f"Day-ahead forecast penalty: {da_penalty:.2f} PLN / {n_days} days "
+        f"= {da_penalty / n_days:.2f} PLN/day"
+    )
+    print(
+        f"Day-ahead captures {(t_nb - t_da) / (t_nb - t_perf) * 100:.0f}% "
+        f"of perfect-info savings"
+        if t_nb != t_perf else ""
     )
 
 
@@ -558,9 +566,9 @@ def plot_day(
     ax = axes[0]
     ax.plot(hours, perfect.soc_wh / 1000, label=f"Perfect ({perfect.total_cost_pln:.2f} PLN)",
             color="#5bb88a", linewidth=2)
-    ax.plot(hours, mpc.soc_wh / 1000, label=f"MPC ({mpc.total_cost_pln:.2f} PLN)",
+    ax.plot(hours, mpc_prices.soc_wh / 1000, label=f"Day-Ahead ({mpc_prices.total_cost_pln:.2f} PLN)",
             color="#64b5f6", linewidth=2)
-    ax.plot(hours, mpc_prices.soc_wh / 1000, label=f"MPC+Price ({mpc_prices.total_cost_pln:.2f} PLN)",
+    ax.plot(hours, mpc.soc_wh / 1000, label=f"Full Forecast ({mpc.total_cost_pln:.2f} PLN)",
             color="#9b8fd8", linewidth=1.5, linestyle="--")
     ax.axhline(y=params.soc_min_wh / 1000, color="gray", linestyle="--", alpha=0.5)
     ax.axhline(y=params.soc_max_wh / 1000, color="gray", linestyle="--", alpha=0.5)
