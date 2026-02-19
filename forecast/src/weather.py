@@ -1,6 +1,6 @@
 """Open-Meteo API: fetch historical weather + forecast, cache to monthly CSVs."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -55,8 +55,6 @@ def fetch_historical(
             month_end = date(year + 1, 1, 1)
         else:
             month_end = date(year, month + 1, 1)
-        from datetime import timedelta
-
         month_end = month_end - timedelta(days=1)
 
         # Clamp to requested range and today
@@ -66,9 +64,37 @@ def fetch_historical(
         if fetch_start > fetch_end:
             continue
 
+        # Narrow fetch range to only missing days
+        if cache_file.exists():
+            existing = pd.read_csv(cache_file, parse_dates=["timestamp"])
+            existing["timestamp"] = pd.to_datetime(existing["timestamp"], utc=True)
+            cached_dates = set(existing["timestamp"].dt.date)
+            # Find first and last missing date in requested range
+            missing = []
+            d = fetch_start
+            while d <= fetch_end:
+                if d not in cached_dates:
+                    missing.append(d)
+                d += timedelta(days=1)
+            if not missing:
+                continue
+            fetch_start = missing[0]
+            fetch_end = missing[-1]
+        else:
+            existing = None
+
         print(f"  Fetching weather: {fetch_start} to {fetch_end}")
-        df = _fetch_open_meteo_historical(lat, lon, fetch_start, fetch_end)
-        df.to_csv(cache_file, index=False)
+        new_df = _fetch_open_meteo_historical(lat, lon, fetch_start, fetch_end)
+
+        # Merge with existing cache
+        if existing is not None:
+            merged = pd.concat([existing, new_df], ignore_index=True)
+            merged = merged.sort_values("timestamp").drop_duplicates(
+                subset=["timestamp"], keep="last"
+            )
+            merged.to_csv(cache_file, index=False)
+        else:
+            new_df.to_csv(cache_file, index=False)
 
     # Load all cached files in range
     frames = []
