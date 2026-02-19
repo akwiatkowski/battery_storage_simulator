@@ -15,6 +15,7 @@ class BatteryParams:
     soc_min_wh: float
     soc_max_wh: float
     export_coeff: float = 0.8
+    round_trip_efficiency: float = 0.90
 
 
 @dataclass
@@ -42,6 +43,9 @@ def optimize_battery(
     T = len(net_load_w)
     N = 5 * T  # total variables
 
+    # Split round-trip efficiency symmetrically: η = √(RTE)
+    eta = np.sqrt(params.round_trip_efficiency)
+
     # Objective: minimize sum(import * price - export * price * export_coeff) / 1000
     c = np.zeros(N)
     c[2 * T : 3 * T] = price / 1000.0  # import cost
@@ -54,6 +58,7 @@ def optimize_battery(
 
     for t in range(T):
         # Energy balance: import[t] - export[t] - charge[t] + discharge[t] = net_load[t]
+        # (charge/discharge are grid-side power, unchanged by efficiency)
         row = t
         A_eq[row, t] = -1.0           # charge
         A_eq[row, T + t] = 1.0        # discharge
@@ -61,11 +66,12 @@ def optimize_battery(
         A_eq[row, 3 * T + t] = -1.0   # export
         b_eq[row] = net_load_w[t]
 
-        # SoC evolution: soc[t] - charge[t] + discharge[t] = soc[t-1]
+        # SoC evolution: soc[t] = soc[t-1] + charge[t]*η - discharge[t]/η
+        # Rearranged: soc[t] - charge[t]*η + discharge[t]/η = soc[t-1]
         row = T + t
         A_eq[row, 4 * T + t] = 1.0    # soc[t]
-        A_eq[row, t] = -1.0           # charge
-        A_eq[row, T + t] = 1.0        # discharge
+        A_eq[row, t] = -eta            # charge * η stored
+        A_eq[row, T + t] = 1.0 / eta   # discharge / η withdrawn
         if t == 0:
             b_eq[row] = initial_soc_wh
         else:
@@ -138,6 +144,9 @@ def simulate_heuristic(
     exp = np.zeros(T)
     soc = np.zeros(T)
 
+    # Split round-trip efficiency symmetrically: η = √(RTE)
+    eta = np.sqrt(params.round_trip_efficiency)
+
     # Compute daily P33/P67 thresholds
     p33, p67 = _daily_percentiles(price)
 
@@ -146,20 +155,22 @@ def simulate_heuristic(
     for t in range(T):
         p = price[t]
 
-        # Determine charge/discharge action
+        # Determine charge/discharge action (grid-side power)
         if p <= p33:
-            # Charge at max power (can import from grid)
-            charge_power = min(params.max_power_w, params.soc_max_wh - current_soc)
+            # Charge at max power — SoC limited by η-scaled capacity
+            max_charge = (params.soc_max_wh - current_soc) / eta
+            charge_power = min(params.max_power_w, max_charge)
             charge_power = max(0.0, charge_power)
             charge[t] = charge_power
         elif p >= p67:
-            # Discharge at max power
-            discharge_power = min(params.max_power_w, current_soc - params.soc_min_wh)
+            # Discharge at max power — SoC limited by 1/η-scaled headroom
+            max_discharge = (current_soc - params.soc_min_wh) * eta
+            discharge_power = min(params.max_power_w, max_discharge)
             discharge_power = max(0.0, discharge_power)
             discharge[t] = discharge_power
 
-        # Update SoC
-        current_soc = current_soc + charge[t] - discharge[t]
+        # Update SoC: charge adds η per W, discharge removes 1/η per W
+        current_soc = current_soc + charge[t] * eta - discharge[t] / eta
         soc[t] = current_soc
 
         # Grid flows: net_load + charge - discharge
